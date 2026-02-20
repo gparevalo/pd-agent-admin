@@ -1,0 +1,206 @@
+Actualiza únicamente la UI del Dashboard en la pantalla /agents/:id.
+
+No modificar:
+- Base de datos
+- Backend endpoints
+- Lógica de negocio
+- Auth
+- API existentes
+
+Solo modificar:
+- UI
+- Componentes
+- Layout
+- Estilos
+- Experiencia visual
+
+Objetivo:
+Agregar un nuevo TAB llamado "Integraciones" dentro de la pantalla de detalle del agente (/agents/:id), respetando exactamente el layout, estructura de tabs y patrones visuales usados en los tabs existentes (Overview, Prompt, Tools, etc).
+
+No cambiar:
+- Paleta de colores existente
+- Tipografía existente
+- Sistema de spacing existente
+- Layout general de /agents/:id
+
+---
+
+## 🧩 ESTRUCTURA DEL TAB "INTEGRACIONES"
+
+El tab "Integraciones" debe tener dos secciones principales:
+
+### 1️⃣ Integraciones del Agente
+(usan tablas existentes: whatsapp_instances, n8n_workflows, agent_webhooks)
+
+Cards:
+
+#### 🟢 WhatsApp (Evolution API)
+
+Mostrar una Card con:
+- Ícono de WhatsApp
+- Título: "WhatsApp Evolution API"
+- Subtítulo: "Canal de mensajería conectado al agente"
+- Estado de conexión (badge: Connected / Disconnected)
+- Número conectado (si existe)
+- Botones:
+  - "Conectar WhatsApp"
+  - "Ver QR"
+  - "Desconectar"
+
+Estados visuales:
+- Loader mientras se genera QR
+- Badge verde si conectado
+- Badge rojo si desconectado
+- Toasts: success / error
+
+Al hacer clic en "Conectar" o "Ver QR":
+Abrir un Modal con:
+
+Modal WhatsApp:
+- Título: "Conectar WhatsApp"
+- Fondo blanco
+- QR centrado
+- Texto: "Escanea este código QR desde WhatsApp"
+- Indicador de estado en tiempo real (conectando / conectado)
+- Animaciones suaves (framer-motion)
+
+---
+
+#### 🟣 n8n Workflow
+
+Mostrar una Card con:
+- Ícono n8n
+- Título: "n8n Workflow"
+- Campos visibles:
+  - Workflow Name
+  - Workflow ID
+  - Webhook URL
+  - Estado (active / inactive)
+- Botón: "Regenerar Workflow"
+
+Modal n8n:
+Al hacer clic en "Ver flujo":
+Mostrar un modal con:
+- Diagrama visual del flujo:
+  WhatsApp → Webhook → n8n → Agente → Respuesta
+- Texto explicativo del flujo
+- Estilo visual tipo diagrama simple
+
+---
+
+### 2️⃣ Integraciones de la Empresa
+(usan tabla: company_integrations)
+
+#### 🔵 Go High Level (OAuth)
+
+Mostrar Card con:
+- Ícono GoHighLevel
+- Título: "Go High Level"
+- Subtítulo: "CRM conectado a la empresa"
+- Estado: Connected / Disconnected
+- Mostrar:
+  - client_id (parcial oculto)
+  - scope
+- Botones:
+  - "Conectar Go High Level"
+  - "Desconectar"
+
+Scope por defecto:
+locations.readonly contacts.readonly contacts.write opportunities.readonly opportunities.write users.readonly calendars.readonly calendars.write calendars/events.write locations/customFields.readonly locations/customFields.write
+
+Modal Go High Level:
+Mostrar flujo OAuth visual:
+
+Empresa → OAuth → Go High Level → Tokens → Plataforma
+
+Campos en modal:
+- Client ID
+- Client Secret (input password)
+- Scope (readonly prellenado)
+- Botón "Autorizar"
+
+---
+
+## 🎨 UX / UI
+
+Usar:
+- Cards blancas
+- Bordes redondeados
+- Sombra suave
+- Layout en grid responsive
+- Animaciones framer-motion
+- Toast notifications
+- Estados visuales claros: loading, success, error
+
+---
+
+## 🧱 COMPONENTES
+
+Crear nuevos componentes UI reutilizables:
+- IntegrationCard
+- IntegrationStatusBadge
+- IntegrationModal
+- QRModal
+- WorkflowDiagramModal
+
+---
+
+## 📐 LAYOUT
+
+El tab Integraciones debe:
+- Usar el mismo contenedor y padding que los otros tabs
+- Mantener alineación
+- Ser responsive
+- No romper el layout actual
+
+Estructura:
+
+Tabs
+ └── Integraciones
+       ├── Integraciones del Agente
+       │      ├── Card WhatsApp
+       │      ├── Card n8n
+       │
+       └── Integraciones de la Empresa
+              └── Card Go High Level
+
+Separar secciones con títulos:
+- "Integraciones del Agente"
+- "Integraciones de la Empresa"
+
+---
+
+## 🚫 NO HACER
+
+- No crear nuevas tablas
+- No cambiar endpoints
+- No modificar flujos backend
+- No tocar autenticación
+- No romper otros tabs
+- No cambiar paleta ni tipografía
+
+---
+
+## 🎯 RESULTADO ESPERADO
+
+Una pantalla Integraciones:
+- Moderna
+- Profesional
+- SaaS premium
+- Clara
+- Visual
+- Funcional
+- Que permita administrar:
+   - WhatsApp
+   - n8n
+   - Go High Level
+- Con modales explicativos de cada flujo
+- Usando las tablas ya existentes:
+   - whatsapp_instances
+   - n8n_workflows
+   - agent_webhooks
+   - company_integrations
+
+---
+
+Implementar ahora el Tab Integraciones completo respetando el diseño actual del dashboard.

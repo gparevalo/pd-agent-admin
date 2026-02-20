@@ -1,0 +1,69 @@
+¡Tienes toda la razón! Mil disculpas. Para que Replit no borre lo que ya hicimos y construya todo el ecosistema (Base de Datos + API + Frontend Funcional), el prompt debe ser una hoja de ruta completa.
+
+Aquí tienes el Mega-Prompt Final que incluye la creación de la tabla, la lógica del servidor, el esquema de validación y la edición de tu página de catálogo para que sea 100% operativa:
+
+🚀 PROMPT INTEGRAL PARA REPLIT
+"Actúa como un desarrollador Fullstack Senior y realiza una implementación integral del sistema de Catálogo. No omitas ningún paso, ya que todas las capas están conectadas:
+
+1. Base de Datos (SQL en Supabase):
+Ejecuta o asegúrate de que exista la tabla catalog con esta estructura:
+
+id: uuid primary key default gen_random_uuid().
+
+company_id: uuid (Foreign Key a companies.id ON DELETE CASCADE).
+
+item_type: text (check: 'product', 'service').
+
+name: text not null, description: text, base_price: numeric, currency: text default 'USD'.
+
+details: jsonb default {"includes": [], "restrictions": [], "estimated_time": ""}.
+
+advanced_config: jsonb default {"variable_pricing": null, "execution_process": []}.
+
+is_active: boolean default true.
+
+2. Esquema y Tipos (shared/schema.ts):
+
+Define la tabla catalog usando pgTable.
+
+Exporta el esquema de validación insertCatalogSchema usando createInsertSchema.
+
+Exporta los tipos Catalog e InsertCatalog.
+
+3. Almacenamiento y Lógica (server/storage.ts):
+
+Actualiza la interfaz IStorage y la clase SupabaseStorage.
+
+Implementa: createCatalogItem, getCatalogByCompany(companyId), getCatalogItem(id), updateCatalogItem(id, updates) y deleteCatalogItem(id).
+
+Usa el cliente de Supabase para realizar estas operaciones.
+
+4. Endpoints del Servidor (server/routes.ts):
+
+Crea las rutas REST bajo /api/catalog:
+
+GET /api/catalog/:companyId: Lista todos los items activos.
+
+POST /api/catalog: Crea un nuevo item (valida con insertCatalogSchema).
+
+PATCH /api/catalog/:id: Actualiza un item existente.
+
+DELETE /api/catalog/:id: Elimina un item.
+
+5. Frontend Funcional (client/src/pages/CatalogPage.tsx):
+
+Edita el archivo existente para conectar el layout con los datos reales.
+
+Usa useQuery de @tanstack/react-query para cargar los items usando el companyId del contexto de autenticación.
+
+Implementa useMutation para las acciones de Crear, Editar y Eliminar.
+
+El CatalogModal debe manejar el estado de edición: si recibe un item, rellena el formulario; si no, se limpia.
+
+Importante: Para los campos JSONB (includes, restrictions, execution_process), permite que el usuario ingrese texto separado por saltos de línea y conviértelo en array antes de enviarlo al servidor.
+
+6. Navegación y App (client/src/App.tsx y Sidebar):
+
+Registra la ruta protegida /catalog en App.tsx.
+
+En el Sidebar, agrega el link 'Catálogo' con el icono Package de lucide-react debajo de la sección de Agentes."

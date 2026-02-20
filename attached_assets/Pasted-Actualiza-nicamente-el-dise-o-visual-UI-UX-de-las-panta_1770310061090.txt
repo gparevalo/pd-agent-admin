@@ -1,0 +1,190 @@
+Actualiza únicamente el diseño visual (UI/UX) de las pantallas Login y Register.
+
+❗ No modificar lógica, rutas, autenticación ni API.
+Solo cambiar estilos y estructura visual de los componentes Login.jsx y Register.jsx.
+
+======================
+🎨 PALETA DE COLORES
+
+Usar la siguiente paleta:
+
+Primary (botones): #16A34A
+
+Texto principal: #111827
+
+Fondo general: #FFFFFF
+
+Fondo de cards: #F3F4F6
+
+Texto secundario: #9CA3AF
+
+Usar CSS variables para permitir personalización futura por empresa.
+
+======================
+🖥️ ESTILO LOGIN & REGISTER (TIPO SEEDPROD)
+
+Inspirado en: https://app.seedprod.com/login
+
+Características:
+
+Diseño minimalista SaaS
+
+Profesional
+
+Premium
+
+Mucho espacio en blanco
+
+Sin saturación visual
+
+======================
+📐 ESTRUCTURA
+
+Desktop (2 columnas):
+
+Izquierda:
+
+Logo de la empresa
+
+Título grande:
+
+Login: "Bienvenido"
+
+Register: "Crea tu cuenta"
+
+Texto pequeño descriptivo
+
+Derecha:
+
+Card blanca con:
+
+bordes redondeados (rounded-xl)
+
+sombra suave (shadow-sm)
+
+padding amplio
+
+formulario
+
+Formularios:
+
+Login:
+
+Email
+
+Password
+
+Botón principal color #16A34A
+
+Link secundario:
+"¿No tienes cuenta? Regístrate"
+
+Register:
+
+Empresa
+
+Nombre
+
+Email
+
+Password
+
+Botón principal color #16A34A
+
+Texto:
+"Prueba gratis 7 días. No se requiere tarjeta de crédito."
+
+Link:
+"¿Ya tienes cuenta? Inicia sesión"
+
+Mobile:
+
+Una sola columna
+
+Card centrada
+
+======================
+✨ ANIMACIONES (Framer Motion)
+
+Aplicar:
+
+Fade in al cargar la página
+
+Slide suave del formulario
+
+Hover en botones (scale 1.02)
+
+Transiciones suaves (duration 0.3s)
+
+======================
+🧩 COMPONENTES
+
+Actualizar:
+
+Login.jsx
+
+Register.jsx
+
+Usar:
+
+TailwindCSS
+
+Framer Motion
+
+Clases recomendadas:
+
+bg-[#F3F4F6] para fondo
+
+text-[#111827]
+
+button bg-[#16A34A] hover:bg-[#15803D]
+
+input con border-gray-300 focus:ring-[#16A34A]
+
+======================
+🧠 UX
+
+Inputs grandes
+
+Botones claros
+
+Mensajes legibles
+
+Espaciado generoso
+
+Tipografía limpia
+
+El diseño debe sentirse:
+
+SaaS moderno
+
+Premium
+
+Profesional
+
+Simple
+
+======================
+🎯 OBJETIVO
+
+Que Login y Register se vean:
+
+Más limpios
+
+Más elegantes
+
+Más profesionales
+
+Más modernos
+
+Sin romper:
+
+Funcionalidad
+
+Validaciones
+
+Rutas
+
+Backend
+
+Solo actualizar UI.

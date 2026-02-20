@@ -1,0 +1,337 @@
+Actúa como Senior Frontend Engineer + UX Designer SaaS.
+
+El proyecto ya tiene una pantalla de detalle de Agente con tabs existentes.
+Debes:
+
+👉 Agregar un nuevo tab llamado: “Integraciones”
+👉 No modificar base de datos ni lógica backend existente
+👉 Solo actualizar UI, estilos y componentes visuales
+
+🎯 OBJETIVO
+
+Crear una sección moderna, limpia y profesional para administrar las integraciones del agente:
+
+WhatsApp (Evolution API)
+
+n8n Workflow
+
+Go Service (microservicio de integración – nivel visual/arquitectura)
+
+La UI debe mostrar:
+
+Estado de conexión
+
+Acciones
+
+Flujo visual de integración
+
+Modales informativos con el proceso de integración
+
+🎨 ESTILO VISUAL (GLOBAL)
+
+Inspirado en:
+https://app.seedprod.com/login
+
+(SaaS premium, limpio, minimalista)
+
+Paleta:
+
+🟢 Primary: #16A34A
+⚫ Texto principal: #111111
+⚪ Fondo: #F8F8F8
+⚪ Bordes: #E5E7EB
+⚪ Cards: #FFFFFF
+
+Características:
+
+Tipografía Inter o similar
+
+Cards con sombra suave
+
+Bordes redondeados (rounded-xl)
+
+Espaciado amplio
+
+Iconos claros (Lucide / Heroicons)
+
+Framer Motion para animaciones
+
+Toast notifications
+
+Responsive
+
+🧩 ESTRUCTURA DE LA PANTALLA (AGENT DETAIL)
+
+Agregar un nuevo tab:
+
+Tabs:
+- General
+- Configuración
+- Testing
+- Integraciones   ✅ NUEVO
+
+🧩 TAB: INTEGRACIONES
+
+Usar layout por cards organizadas por integración.
+
+Layout general:
+
+Grid responsive:
+
+[ WhatsApp Integration Card ]
+[ n8n Workflow Card ]
+[ Go Service Integration Card ]
+
+
+Cada card muestra:
+
+Ícono grande
+
+Título
+
+Subtítulo
+
+Estado
+
+Botones de acción
+
+Botón "Ver Flujo"
+
+🟢 CARD 1: WhatsApp Integration (Evolution API)
+
+Mostrar card con:
+
+Ícono WhatsApp
+
+Título: “WhatsApp Integration”
+
+Subtítulo: “Conecta tu agente con WhatsApp usando Evolution API”
+
+Campos visibles:
+
+Estado de conexión (badge):
+
+Verde: Conectado
+
+Rojo: Desconectado
+
+Número conectado (si existe)
+
+Botones:
+
+“Conectar WhatsApp”
+
+“Desconectar”
+
+“Ver QR”
+
+“Ver Flujo”
+
+Estados:
+
+Loader mientras se genera QR
+
+Toast success/error
+
+🪟 MODAL: QR WhatsApp
+
+Al hacer click en "Ver QR":
+
+Modal centrado:
+
+Fondo blanco
+
+QR grande centrado
+
+Texto:
+"Escanea este código QR desde WhatsApp"
+
+Indicador de estado en tiempo real
+
+Animación fade + scale
+
+🪟 MODAL: Flujo WhatsApp
+
+Al hacer click en “Ver Flujo”:
+
+Mostrar diagrama visual (no técnico, UI):
+
+Usuario WhatsApp
+        ↓
+Evolution API
+        ↓
+n8n Workflow
+        ↓
+Backend API
+        ↓
+Agente IA
+        ↓
+Respuesta
+
+
+Usar:
+
+Cards conectadas por flechas
+
+Animación slide-in
+
+Iconos
+
+Colores suaves
+
+Explicación textual debajo
+
+🟣 CARD 2: n8n Workflow
+
+Mostrar:
+
+Workflow Name
+
+Workflow ID
+
+Webhook URL
+
+Estado (activo/inactivo)
+
+Botones:
+
+“Regenerar Workflow”
+
+“Ver Flujo”
+
+🪟 MODAL: Flujo n8n
+
+Diagrama visual:
+
+Webhook n8n
+   ↓
+Validación
+   ↓
+Guardar mensaje
+   ↓
+IA
+   ↓
+Enviar respuesta
+
+
+Con:
+
+Cards
+
+Flechas
+
+Animación
+
+Texto explicativo
+
+🔵 CARD 3: Go Service Integration (High Level)
+
+Card informativa (arquitectura):
+
+Título:
+“Go Integration Service”
+
+Subtítulo:
+“Microservicio para orquestar mensajes entre WhatsApp, n8n y el agente”
+
+Estado:
+
+Activo / Inactivo (visual)
+
+Botón:
+
+“Ver Arquitectura”
+
+🪟 MODAL: Flujo Go Service
+
+Mostrar arquitectura high-level:
+
+WhatsApp
+   ↓
+Go Service API
+   ↓
+n8n
+   ↓
+Backend
+   ↓
+IA Agent
+
+
+Solo visual, no lógica.
+
+✨ UX Y ANIMACIONES
+
+Implementar:
+
+Framer Motion:
+
+fade-in
+
+slide-up
+
+hover scale
+
+Estados visuales:
+
+loading
+
+success
+
+error
+
+Toast notifications
+
+Skeleton loaders
+
+🚫 RESTRICCIONES IMPORTANTES
+
+NO modificar:
+
+Backend endpoints
+
+Base de datos
+
+Lógica existente
+
+Flujos actuales
+
+Solo modificar:
+
+✅ UI
+✅ Componentes
+✅ Estilos
+✅ Layout
+✅ Animaciones
+✅ Experiencia visual
+
+🧱 COMPONENTES A CREAR / ACTUALIZAR
+
+AgentIntegrationsTab.jsx
+
+WhatsAppIntegrationCard.jsx
+
+N8nIntegrationCard.jsx
+
+GoIntegrationCard.jsx
+
+IntegrationFlowModal.jsx
+
+QrModal.jsx
+
+🎯 RESULTADO FINAL
+
+Pantalla Integraciones:
+
+Profesional
+
+Moderna
+
+Minimalista
+
+Clara
+
+SaaS premium
+
+Visualmente explicativa
+
+Lista para escalar a más integraciones (Telegram, Webchat, CRM)

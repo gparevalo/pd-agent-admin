@@ -1,0 +1,324 @@
+Actúa como arquitecto fullstack senior.
+Genera una aplicación web SaaS multiempresa (multi-tenant).
+
+Backend: Node.js + Express
+Frontend: React + TailwindCSS
+Base de datos: PostgreSQL (Supabase)
+Autenticación: JWT (implementada en el backend, no usar Supabase Auth)
+
+Las tablas ya existen en Supabase y deben integrarse usando el SDK oficial de Supabase solo como base de datos PostgreSQL.
+
+======================
+🎨 DISEÑO UI
+
+La aplicación debe ser:
+
+Minimalista
+
+Moderna
+
+Profesional
+
+Animaciones sutiles y elegantes
+
+Usar:
+
+TailwindCSS
+
+Framer Motion para animaciones suaves
+
+Cards con sombra ligera
+
+Bordes redondeados
+
+Espaciado limpio
+
+Colores base por defecto:
+
+Primary: rojo (#E10600)
+
+Secondary: negro (#111111)
+
+Background: blanco (#FFFFFF)
+
+======================
+🎨 PERSONALIZACIÓN POR EMPRESA (THEME)
+
+La tabla companies contiene:
+
+company_name
+
+primary_color
+
+secondary_color
+
+logo_url
+
+Al hacer login:
+
+obtener los datos de company desde Supabase
+
+guardar el theme en un ThemeContext global (React Context)
+
+aplicar CSS variables dinámicas:
+--primary-color
+--secondary-color
+--bg-color
+
+Permitir modificar desde la pantalla Configuración Empresa:
+
+logo
+
+colores
+
+nombre comercial
+
+======================
+🔐 REGISTRO AUTOMÁTICO CON TRIAL
+
+Al registrar un usuario:
+
+Crear company
+
+Crear client
+
+Crear user con role = company_admin
+
+Crear subscription con:
+
+status = trial
+
+billing_cycle = trial
+
+start_date = hoy
+
+end_date = hoy + 7 días
+
+base_price = 0
+
+final_price = 0
+
+El sistema debe validar siempre que exista una suscripción activa.
+
+======================
+🔑 LOGIN
+
+Login con email y password
+
+Generar JWT
+
+Validar:
+
+subscription.status = trial o active → permitir acceso
+
+status = expired o suspended → redirigir a /subscription
+
+======================
+📂 SIDEBAR DINÁMICO POR ROL
+
+superadmin:
+
+Dashboard
+
+Empresas
+
+Planes
+
+Suscripciones
+
+Descuentos
+
+Usuarios
+
+company_admin:
+
+Home
+
+Leads
+
+Conversaciones
+
+Agentes
+
+Membresía
+
+Configuración Empresa
+
+client_admin:
+
+Home
+
+Leads
+
+Conversaciones
+
+Perfil
+
+======================
+💳 PANTALLA MEMBRESÍA
+
+Diseño tipo pricing cards:
+
+Monthly
+
+Semestral
+
+Annual
+
+Campo:
+
+Código de descuento
+
+Mostrar:
+
+Precio base
+
+Precio final (aplicando descuento)
+
+Botón:
+
+Activar Plan
+
+Al activar:
+
+crear nueva subscription en Supabase
+
+registrar descuento en subscription_discounts si aplica
+
+======================
+📋 LEADS
+
+UI con:
+
+Tabla moderna
+
+Filtros
+
+Modal para crear lead
+
+Animaciones suaves
+
+CRUD:
+
+GET /leads (por company_id y client_id)
+
+POST /leads
+
+======================
+🔒 SEGURIDAD
+
+Implementar:
+
+JWT middleware
+
+Middleware de validación de suscripción activa
+
+Middleware por rol (superadmin, company_admin, client_admin)
+
+Aislamiento multiempresa por company_id
+
+======================
+🖥️ WIREFRAMES
+
+LOGIN:
+Card centrada con logo, email, password y botón rojo.
+
+REGISTER:
+Empresa, nombre, email, password, botón “Prueba gratis 7 días”.
+
+DASHBOARD:
+Cards:
+
+Plan actual
+
+Días restantes
+
+Total Leads
+
+Total Conversaciones
+
+Semáforo cliente
+
+SIDEBAR:
+Logo arriba, links con iconos y hover animado.
+
+LEADS:
+Tabla con botón "+ Nuevo Lead" y modal.
+
+CONVERSACIONES:
+Vista tipo chat con resumen final del agente.
+
+AGENTES:
+Crear agente (nombre, tono, emojis, objetivo).
+
+MEMBRESÍA:
+Pricing cards + campo código descuento.
+
+CONFIG EMPRESA:
+Subir logo, cambiar colores, vista previa en tiempo real.
+
+BLOQUEO:
+Pantalla "Membresía vencida".
+
+======================
+🖥️ ENTREGAR
+
+Estructura frontend y backend separada.
+
+Componentes React:
+
+Login.jsx
+
+Register.jsx
+
+Dashboard.jsx
+
+Sidebar.jsx
+
+Leads.jsx
+
+Subscription.jsx
+
+CompanySettings.jsx
+
+API Endpoints:
+
+POST /auth/register
+
+POST /auth/login
+
+GET /company/theme
+
+PUT /company/theme
+
+GET /subscription/current
+
+POST /subscription/activate
+
+POST /discount/validate
+
+GET /leads
+
+POST /leads
+
+Usar Supabase SDK para todas las consultas a PostgreSQL.
+
+Implementar Framer Motion para:
+
+hover
+
+fade in
+
+slide transitions
+
+El código debe ser:
+
+limpio
+
+modular
+
+escalable
+
+preparado para producción
+
+orientado a SaaS multiempresa.

@@ -1,0 +1,33 @@
+Necesito realizar una estandarización visual completa en todo el sistema. Actualmente tengo un mix de estilos y quiero unificar todo bajo la identidad del manual de marca manual-marca.pdf que he subido, pero respetando las estructuras de diseño que ya construí con mi asistente. Sigue estas reglas estrictas:
+
+1. Sistema de Colores y Botones (Tailwind & CSS Global):
+
+Actualiza tailwind.config.ts y las variables en client/src/index.css basándote en el manual de marca de PD.
+
+Regla Estricta de Botones: Estandariza el componente Button principal. Deben ser negros (zinc-950/black) con un efecto hover rojo (usa el rojo exacto del manual de PD). Esto debe aplicar a todos los botones variant="default" del sistema.
+
+No satures todo con un solo color; usa la paleta del manual para acentos, bordes y estados, manteniendo un equilibrio profesional (blancos, grises sutiles y los colores de marca).
+
+2. Estandarización de Componentes (Cards, Tabs, Títulos):
+
+Cards: Todas las tarjetas del sistema (en CatalogPage, Dashboard, etc.) deben tener el mismo estilo: bordes redondeados rounded-[2rem] o rounded-[2.5rem], sombras suaves y sin bordes marcados (border-none), igual que en el layout del Catálogo.
+
+Tabs: Estandariza los estilos de los Tabs de Agentes para que sean consistentes en todas las pantallas.
+
+Títulos: Usa tipografías con font-black y tracking-tight para los encabezados principales (H1, H2).
+
+3. Ajustes en AgentDetail.tsx:
+
+IMPORTANTE: Edita client/src/pages/agents/AgentDetail.tsx y sus componentes internos para que coincidan con la nueva paleta de PD y el estilo de las Cards estandarizadas.
+
+EXCEPCIÓN: No toques el Header de la página de Detail; ese diseño ya está perfecto y debe mantenerse intacto. Solo ajusta los colores de los elementos internos si chocan con la nueva paleta.
+
+4. Animaciones y UX:
+
+Asegúrate de que todos los componentes nuevos o actualizados usen framer-motion para las entradas (initial={{ opacity: 0, y: 10 }}) para que la experiencia de navegación sea fluida y profesional en todo el sitio.
+
+5. Limpieza de Estilos:
+
+Elimina cualquier rastro de estilos anteriores que no coincidan con la nueva guía. Busca consistencia en paddings, gaps y redondez de esquinas en todas las pantallas (client/src/pages).
+
+Regla Final: Mantén toda la funcionalidad de los formularios, las conexiones con Supabase y las mutaciones de datos intactas. Solo estamos puliendo la 'piel' del sistema."

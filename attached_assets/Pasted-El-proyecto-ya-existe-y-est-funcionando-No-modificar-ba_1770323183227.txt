@@ -1,0 +1,266 @@
+El proyecto ya existe y está funcionando.
+
+❗ No modificar base de datos.
+❗ No romper funcionalidades existentes.
+❗ No eliminar componentes actuales.
+
+Solo extender la funcionalidad de la pantalla Agentes IA agregando una vista de detalle por agente con edición y test chat.
+
+📂 NUEVA RUTA
+
+Agregar:
+
+/agents/:id
+
+
+Desde la lista de agentes, al hacer click en un agente navegar a su pantalla de detalle.
+
+🧱 ARQUITECTURA DE COMPONENTES
+
+Crear o modificar:
+
+AgentList.jsx (ya existente → agregar navegación)
+
+AgentDetail.jsx (nuevo)
+
+AgentTabs.jsx
+
+AgentInfoTab.jsx
+
+AgentConfigTab.jsx
+
+AgentChatTest.jsx
+
+AgentKnowledgeTab.jsx
+
+AgentStatusTab.jsx
+
+🧩 LAYOUT GENERAL
+
+Pantalla con:
+
+Header:
+
+Nombre del agente
+
+Botón volver
+
+Badge de status
+
+Debajo:
+Tabs con animación:
+
+Información
+
+Configuración
+
+Test Chat
+
+Conocimiento
+
+Estado
+
+Contenido en Cards con sombra suave, bordes redondeados y padding amplio.
+
+Usar:
+
+TailwindCSS
+
+Framer Motion
+
+Diseño SaaS moderno
+
+Responsive
+
+🗂 TAB 1 — INFORMACIÓN
+
+Campos editables:
+
+Nombre
+
+Tono (select)
+
+Emoji style (select)
+
+Website URL (input)
+
+Status (toggle)
+
+Botón:
+
+Guardar cambios
+
+UX:
+
+Feedback visual al guardar
+
+Animación suave
+
+⚙️ TAB 2 — CONFIGURACIÓN
+
+Campos:
+
+Textarea grande: Descripción del servicio
+
+Textarea grande: Prompt interno del agente
+
+Agrupar en cards separadas.
+
+Botón Guardar.
+
+💬 TAB 3 — TEST CHAT
+
+Interfaz tipo chat:
+
+Área scrollable de mensajes
+
+Burbujas (user / agent)
+
+Input fijo abajo
+
+Botón Enviar
+
+Animación fade in de mensajes
+
+Scroll automático
+
+Funcionalidad:
+
+POST /agents/:id/test-chat
+
+No guardar conversación en BD (modo test)
+
+Simular respuesta del agente
+
+📚 TAB 4 — CONOCIMIENTO
+
+Campos:
+
+Textarea grande para FAQ
+
+Input URL web
+
+Botón Guardar
+
+UX:
+
+Cards separadas
+
+Textos explicativos
+
+🚦 TAB 5 — ESTADO
+
+Mostrar métricas:
+
+Estado del agente
+
+Total conversaciones
+
+Total leads
+
+Tasa conversión
+
+Vista solo lectura.
+
+🔗 API ENDPOINTS
+
+Usar:
+
+GET /agents/:id
+PUT /agents/:id
+POST /agents/:id/test-chat
+
+
+Manejar:
+
+loading
+
+error
+
+success
+
+✨ ANIMACIONES (Framer Motion)
+
+Aplicar:
+
+Fade in al cambiar tab
+
+Slide horizontal suave
+
+Hover en botones
+
+Microinteracciones en inputs
+
+Duración:
+
+0.2s – 0.4s
+
+🎨 ESTILO VISUAL
+
+Minimalista
+
+Profesional
+
+SaaS
+
+Cards
+
+Bordes redondeados
+
+Sombra ligera
+
+Mucho espacio en blanco
+
+Paleta dinámica por empresa (CSS variables)
+
+🧠 UX AVANZADO
+
+Tabs sticky arriba
+
+Header fijo con nombre del agente
+
+Loader skeleton
+
+Toasts de éxito/error
+
+Confirmación al guardar
+
+Validaciones básicas
+
+📱 RESPONSIVE
+
+Mobile:
+
+Tabs como dropdown
+
+Chat full width
+
+Cards apiladas
+
+🎯 OBJETIVO FINAL
+
+Que la pantalla del agente:
+
+Sea clara
+
+Sea organizada
+
+Sea profesional
+
+Permita editar
+
+Permita probar el agente
+
+Permita configurar conocimiento
+
+Sea moderna tipo SaaS
+
+❌ NO HACER
+
+No modificar BD
+
+No romper rutas existentes
+
+No cambiar autenticación
+
+No eliminar pantalla actual de agentes
