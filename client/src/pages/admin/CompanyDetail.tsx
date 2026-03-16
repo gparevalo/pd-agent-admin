@@ -102,6 +102,11 @@ export default function CompanyDetail() {
         enabled: !!companyId,
     });
 
+    const { data: serviceActivations } = useQuery<any[]>({
+        queryKey: [`/api/admin/client-operations/services/${companyId}`],
+        enabled: !!companyId,
+    });
+
     const { data: catalogItems } = useQuery<any[]>({
         queryKey: [`/api/admin/catalog/${companyId}`],
         enabled: !!companyId,
@@ -291,26 +296,44 @@ export default function CompanyDetail() {
                     <TabsTrigger value="overview" className="gap-2 py-2 px-4">
                         <BarChart3 className="h-4 w-4" /> Resumen
                     </TabsTrigger>
+
+                    {(isContractPending || isOnboarding || isActivation || isActiveClient) && (
+                        <TabsTrigger value="billing" className="gap-2 py-2 px-4">
+                            <CreditCard className="h-4 w-4" /> Facturación
+                        </TabsTrigger>
+                    )}
+
+                    {(isOnboarding || isActivation || isActiveClient) && (
+                        <TabsTrigger value="onboarding" className="gap-2 py-2 px-4">
+                            <Rocket className="h-4 w-4" /> Onboarding
+                        </TabsTrigger>
+                    )}
+
+
                     <TabsTrigger value="operations" className="gap-2 py-2 px-4">
                         <Target className="h-4 w-4" /> Operaciones
                     </TabsTrigger>
-                    <TabsTrigger value="ai-assets" className="gap-2 py-2 px-4">
-                        <Bot className="h-4 w-4" /> Agentes IA
-                    </TabsTrigger>
-                    <TabsTrigger value="billing" className="gap-2 py-2 px-4">
-                        <CreditCard className="h-4 w-4" /> Facturación
-                    </TabsTrigger>
+
+                    {(isActivation || isActiveClient) && (
+                        <TabsTrigger value="activation" className="gap-2 py-2 px-4">
+                            <ExternalLink className="h-4 w-4" /> Activación
+                        </TabsTrigger>
+                    )}
+
                     <TabsTrigger value="team" className="gap-2 py-2 px-4">
                         <Users className="h-4 w-4" /> Equipo
                     </TabsTrigger>
+
                     <TabsTrigger value="activity" className="gap-2 py-2 px-4">
-                        <Activity className="h-4 w-4" /> Actividad
+                        <Clock className="h-4 w-4" /> Actividad
                     </TabsTrigger>
-                    {!isNewLead && !isContractPending && (
-                        <TabsTrigger value="kickoff" className="gap-2 py-2 px-4">
-                            <Rocket className="h-4 w-4" /> Kickoff
+
+                    {(isActivation || isActiveClient) && (
+                        <TabsTrigger value="ai-assets" className="gap-2 py-2 px-4">
+                            <Bot className="h-4 w-4" /> Agentes IA
                         </TabsTrigger>
                     )}
+
                 </TabsList>
 
                 {/* --- OVERVIEW TAB --- */}
@@ -319,89 +342,81 @@ export default function CompanyDetail() {
                     <CompanyOverview
                         company={company}
                         client360={client360}
-                        kickoffAction={kickoffMutation}
+                        kickoffAction={() => kickoffMutation.mutate()}
                         catalogItems={catalogItems || []}
-                        isReadOnly={isReadOnly || isActivation}
-                        hideStrategy={isNewLead || isContractPending}
                     />
                 </TabsContent>
 
                 {/* --- OPERATIONS TAB --- */}
                 <TabsContent value="operations" className="space-y-6 outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Kanban className="h-5 w-5" /> Pipeline de Adquisición
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {client360?.pipeline ? (
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center bg-primary/5 p-4 rounded-lg border border-primary/10">
-                                            <div>
-                                                <p className="text-xs text-muted-foreground font-semibold uppercase">Etapa Actual</p>
-                                                <p className="text-xl font-bold text-primary capitalize">{client360.pipeline.current_stage.replace("_", " ")}</p>
-                                            </div>
-                                            <Badge variant="outline" className="h-fit">Actualizado {new Date(client360.pipeline.updated_at).toLocaleDateString()}</Badge>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between text-xs">
-                                                <span>Progreso de Etapa</span>
-                                                <span className="font-bold">65%</span>
-                                            </div>
-                                            <Progress value={65} className="h-2" />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground text-center py-8">Este cliente no tiene un seguimiento de pipeline activo.</p>
-                                )}
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <CheckCircle2 className="h-5 w-5" /> Proceso de Onboarding
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {client360?.onboarding ? (
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-                                                    <Clock className="h-5 w-5 text-blue-500" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-bold">{client360.onboarding.status === 'in_progress' ? 'Configuración en Curso' : 'Onboarding Finalizado'}</p>
-                                                    <p className="text-xs text-muted-foreground">PM: {client360.onboarding.assigned_pm || "Sin asignar"}</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xl font-bold">{client360.onboarding.progress_percentage}%</span>
-                                        </div>
-                                        <Progress value={client360.onboarding.progress_percentage} className="h-2" />
-                                        <div className="pt-2">
-                                            <Button variant="outline" size="sm" className="w-full gap-2">
-                                                <ExternalLink className="h-4 w-4" /> Ver Listado de Tareas
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6">
-                                        <p className="text-sm text-muted-foreground mb-4">No se ha iniciado un proceso de onboarding.</p>
-                                        {!isReadOnly && <Button size="sm">Iniciar Onboarding</Button>}
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
-
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-lg flex items-center gap-2">
-                                <Activity className="h-5 w-5" /> Activación de Servicios
+                                <Kanban className="h-5 w-5" /> Pipeline de Adquisición
                             </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground">Gestión de etapas y transición de prospectos.</p>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="onboarding" className="space-y-6 outline-none">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Detalles de Onboarding</CardTitle>
+                            <CardDescription>Configuración inicial y seguimiento de la cuenta.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">Project Manager</p>
+                                    <p className="text-sm font-medium">{client360?.onboarding?.assigned_pm || "Pendiente asignar"}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">COO</p>
+                                    <p className="text-sm font-medium">{client360?.onboarding?.assigned_coo || "Pendiente asignar"}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">Carpeta Drive</p>
+                                    {client360?.onboarding?.drive_folder_url ? (
+                                        <a href={client360.onboarding.drive_folder_url} target="_blank" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                            Ver Carpeta <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    ) : <p className="text-sm text-muted-foreground font-medium italic">No configurada</p>}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">Space en ClickUp</p>
+                                    {client360?.onboarding?.clickup_space_url ? (
+                                        <a href={client360.onboarding.clickup_space_url} target="_blank" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                            Ver Space <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    ) : <p className="text-sm text-muted-foreground font-medium italic">No configurado</p>}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">Grupo de WhatsApp</p>
+                                    {client360?.onboarding?.whatsapp_group_url ? (
+                                        <a href={client360.onboarding.whatsapp_group_url} target="_blank" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                            Ver Grupo <ExternalLink className="h-3 w-3" />
+                                        </a>
+                                    ) : <p className="text-sm text-muted-foreground font-medium italic">Sin grupo</p>}
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase">Reunión de Kickoff</p>
+                                    <p className="text-sm font-medium">
+                                        {client360?.onboarding?.kickoff_meeting_date ? new Date(client360.onboarding.kickoff_meeting_date).toLocaleString() : "Pendiente programar"}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="activation" className="space-y-6 outline-none">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Activación de Servicios</CardTitle>
+                            <CardDescription>Seguimiento de lanzamientos y despliegues técnicos.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -409,29 +424,38 @@ export default function CompanyDetail() {
                                     <TableRow>
                                         <TableHead>Servicio</TableHead>
                                         <TableHead>Estado</TableHead>
-                                        <TableHead>Activación</TableHead>
+                                        <TableHead>RUC Facturación</TableHead>
+                                        <TableHead>Contrato</TableHead>
                                         <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {client360?.services?.length > 0 ? client360.services.map((s: any) => (
-                                        <TableRow key={s.id}>
-                                            <TableCell className="font-bold capitalize">{s.service_type.replace("_", " ")}</TableCell>
+                                    {serviceActivations?.map((s: any) => (
+                                        <TableRow key={s.id} className="group hover:bg-muted/10 transition-colors">
+                                            <TableCell className="font-bold">{s.service_name}</TableCell>
                                             <TableCell>
-                                                <Badge variant={s.status === 'active' ? 'default' : 'secondary'} className="capitalize">
-                                                    {s.status}
+                                                <Badge variant="outline" className="capitalize border-primary/20 text-primary bg-primary/5">
+                                                    {s.status.replace("_", " ")}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
-                                                {s.activated_at ? new Date(s.activated_at).toLocaleDateString() : "Pendiente"}
+                                            <TableCell className="text-xs font-medium">{s.billing_ruc}</TableCell>
+                                            <TableCell>
+                                                {s.contract_addendum_url ? (
+                                                    <a href={s.contract_addendum_url} target="_blank" className="text-primary hover:underline flex items-center gap-1 text-sm font-medium">
+                                                        Anexo <ExternalLink className="h-3 w-3" />
+                                                    </a>
+                                                ) : <span className="text-muted-foreground italic text-xs">N/A</span>}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                {!isReadOnly && <Button variant="ghost" size="sm"><Settings2 className="h-4 w-4" /></Button>}
+                                                <Button variant="ghost" size="icon" className="rounded-full"><Settings2 className="h-4 w-4" /></Button>
                                             </TableCell>
                                         </TableRow>
-                                    )) : (
+                                    ))}
+                                    {(!serviceActivations || serviceActivations.length === 0) && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay servicios activados.</TableCell>
+                                            <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                                                No hay registros de activación para este cliente.
+                                            </TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>

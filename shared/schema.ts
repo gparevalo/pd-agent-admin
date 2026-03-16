@@ -481,15 +481,30 @@ export type OperationsClient = typeof operationsClients.$inferSelect;
 export const operationsClientSteps = pgTable("operations_client_steps", {
   id: varchar("id").primaryKey(),
   client_operation_id: varchar("client_operation_id").notNull().references(() => operationsClients.id),
+  stage_id: text("stage_id"),
   step_key: text("step_key"),
   step_name: text("step_name"),
   completed: boolean("completed").default(false),
+  completed_by: varchar("completed_by").references(() => users.id),
   completed_at: timestamp("completed_at"),
 });
 
 export const insertOperationsClientStepSchema = createInsertSchema(operationsClientSteps).omit({ id: true });
 export type InsertOperationsClientStep = z.infer<typeof insertOperationsClientStepSchema>;
 export type OperationsClientStep = typeof operationsClientSteps.$inferSelect;
+
+export const operationsStageStepTemplates = pgTable("operations_stage_step_templates", {
+  id: varchar("id").primaryKey(),
+  stage_id: text("stage_id").notNull(),
+  step_key: text("step_key").notNull(),
+  step_name: text("step_name").notNull(),
+  is_required: boolean("is_required").default(true),
+  display_order: integer("display_order").default(0),
+});
+
+export const insertOperationsStageStepTemplateSchema = createInsertSchema(operationsStageStepTemplates).omit({ id: true });
+export type InsertOperationsStageStepTemplate = z.infer<typeof insertOperationsStageStepTemplateSchema>;
+export type OperationsStageStepTemplate = typeof operationsStageStepTemplates.$inferSelect;
 
 export const operationsOnboarding = pgTable("operations_onboarding", {
   id: varchar("id").primaryKey(),

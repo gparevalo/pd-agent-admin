@@ -197,20 +197,24 @@ export async function registerRoutes(
         const companies = await storage.getAllCompanies();
         const subscriptions = await storage.getAllSubscriptions();
 
-        const enrichedCompanies = companies.map(c => {
+        const enrichedCompanies = await Promise.all(companies.map(async (c: any) => {
           const sub = subscriptions
-            .filter(s => s.company_id === c.id)
+            .filter(s => s.company_id === (c.id || c.company_id))
             .sort((a, b) => {
               const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
               const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
               return dateB - dateA;
             })[0];
 
+          const completeness = await storage.getProfileCompleteness(c.id || c.company_id);
+
           return {
             ...c,
-            current_subscription_status: sub ? sub.status : "none"
+            id: c.id || c.company_id, // Ensure ID consistency
+            current_subscription_status: sub ? sub.status : "none",
+            profile_completeness: completeness
           };
-        });
+        }));
 
         res.json(enrichedCompanies);
       } catch (error) {
@@ -1887,13 +1891,92 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req, res) => {
       try {
-        const updated = await storage.updateOperationsClient(req.params.id, req.body);
+        const opId = req.params.id;
+        const { status: newStatus } = req.body;
+
+        if (newStatus) {
+          const currentOp = await storage.getOperationsClient(opId);
+          if (!currentOp) return res.status(404).json({ message: "Operación no encontrada" });
+
+          const currentStatus = currentOp.status;
+
+          // Stage Transition Validation
+          if (currentStatus === "new_lead" && newStatus === "contract_pending") {
+            if (!currentOp.client_name || !currentOp.service_contracted) {
+              return res.status(400).json({ message: "Faltan campos requeridos: Nombre de Cliente o Servicio para avanzar a Contrato." });
+            }
+          }
+
+          if (currentStatus === "contract_pending" && newStatus === "onboarding") {
+            if (!currentOp.billing_ruc || !currentOp.billing_name) {
+              return res.status(400).json({ message: "Faltan datos de facturación para activar Onboarding." });
+            }
+            
+            // Check steps completion
+            const { done, total } = await storage.getOperationStageProgress(opId, currentStatus);
+            if (done < total && total > 0) {
+              return res.status(400).json({ message: "Debe completar todos los checklist de la etapa actual antes de avanzar." });
+            }
+
+            // Auto-create onboarding record
+            const existingOnboarding = await storage.getOperationsOnboarding(opId);
+            if (!existingOnboarding) {
+              await storage.upsertOperationsOnboarding({
+                company_id: currentOp.company_id,
+                client_operation_id: opId,
+                status: "pending"
+              });
+            }
+          }
+        }
+
+        const updated = await storage.updateOperationsClient(opId, req.body);
         res.json(updated);
       } catch (error) {
         console.error("Error updating operation:", error);
         res.status(500).json({ message: "Error al actualizar operación" });
       }
     },
+  );
+
+  // Operational Steps
+  app.get(
+    "/api/operations/:operationId/steps",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const groupedSteps = await storage.getOperationStepsGrouped(req.params.operationId);
+        res.json(groupedSteps);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener pasos de operación" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/operations/steps/:stepId",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { completed } = req.body;
+        const updateData: any = { completed };
+
+        if (completed) {
+          updateData.completed_at = new Date();
+          updateData.completed_by = req.user!.id;
+        } else {
+          updateData.completed_at = null;
+          updateData.completed_by = null;
+        }
+
+        const updatedStep = await storage.updateOperationsClientStep(req.params.stepId, updateData);
+        res.json(updatedStep);
+      } catch (error) {
+        res.status(500).json({ message: "Error al actualizar paso" });
+      }
+    }
   );
 
   app.post(
@@ -1967,6 +2050,7 @@ export async function registerRoutes(
         res.json({
           ...view,
           pipeline_status: companyOp?.status || "new_lead",
+          operation_id: companyOp?.id,
           summary: view,
           profile: profile ? {
             ...profile,

@@ -17,13 +17,11 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   Bot,
   Building2,
-  Cpu,
   CreditCard,
   FileText,
   Home,
   Kanban,
   Layers,
-  LayoutDashboard,
   LogOut,
   MessageSquare,
   Package,
@@ -31,7 +29,7 @@ import {
   Settings2,
   Tag,
   UserPlus,
-  Users,
+  Users
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
@@ -44,7 +42,6 @@ interface MenuItem {
 const superadminMenu: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Clientes", url: "/admin/companies", icon: Building2 },
-  { title: "Usuarios", url: "/admin/users", icon: Users },
 ];
 
 const operationsMenu: MenuItem[] = [
@@ -62,6 +59,10 @@ const aiPlatformMenu: MenuItem[] = [
   { title: "Planes", url: "/admin/plans", icon: FileText },
   { title: "Descuentos", url: "/admin/discounts", icon: Tag },
 
+];
+
+const superadminConfigMenu: MenuItem[] = [
+  { title: "Usuarios", url: "/admin/users", icon: Users },
 ];
 
 const companyAdminMenu: MenuItem[] = [
@@ -193,6 +194,32 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {aiPlatformMenu.map((item) => {
+                    const isActive = location === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive}
+                          data-testid={`nav-ai-${item.title.toLowerCase().replace(" ", "-")}`}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+
+            <SidebarGroup>
+              <SidebarGroupLabel>Configuración</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {superadminConfigMenu.map((item) => {
                     const isActive = location === item.url;
                     return (
                       <SidebarMenuItem key={item.title}>

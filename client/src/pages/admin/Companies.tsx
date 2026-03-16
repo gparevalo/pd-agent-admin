@@ -1,27 +1,39 @@
-import { Building2, Search, MoreHorizontal, Globe, Mail, Plus, User, Shield, Loader2, ArrowRight, Phone, MapPin, Copy, Eye, EyeOff, Check, Edit2, ExternalLink, Rocket } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { WhatsappDialog } from "@/components/common/WhatsappDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
+  Dialog, DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage
 } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { zodResolver } from "@hookform/resolvers/zod";
 import type { Company } from "@shared/schema";
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { ArrowRight, Building2, Check, Copy, Edit2, ExternalLink, Eye, EyeOff, Loader2, Mail, MessageCircle, Phone, Plus, Rocket, Search, User } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { Link } from "wouter";
+import { z } from "zod";
 
 // Schema for Creation (Company + Admin)
 const createCompanySchema = z.object({
@@ -65,6 +77,13 @@ export default function AdminCompanies() {
   const [lastCreatedCreds, setLastCreatedCreds] = useState<{ name: string; email: string; pass: string; company: string } | null>(null);
   const [showPass, setShowPass] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Filter states
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterIndustry, setFilterIndustry] = useState("all");
+  const [filterPlan, setFilterPlan] = useState("all");
+  const [filterClassification, setFilterClassification] = useState("all");
+  const [filterAccountStatus, setFilterAccountStatus] = useState("all");
 
   // WhatsApp states
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
@@ -169,10 +188,27 @@ export default function AdminCompanies() {
     toast({ title: "Copiado al portapapeles" });
   };
 
-  const generateWhatsAppLink = () => {
-    if (!lastCreatedCreds) return "";
-    const cleanPhone = waPhone.replace(/[^\d]/g, "");
-    const msg = `Hola ${lastCreatedCreds.name},
+
+
+  const filteredCompanies = companies?.filter((company: any) => {
+    const matchesSearch = company.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === "all" || company.pipeline_status === filterStatus;
+    const matchesIndustry = filterIndustry === "all" || (company.industry || "General") === filterIndustry;
+    const matchesPlan = filterPlan === "all" || company.current_subscription_status === filterPlan;
+    const matchesClass = filterClassification === "all" || company.client_classification === filterClassification;
+    const matchesAccountStatus = filterAccountStatus === "all" || company.account_status === filterAccountStatus;
+
+    return matchesSearch && matchesStatus && matchesIndustry && matchesPlan && matchesClass && matchesAccountStatus;
+  });
+
+  // Unique values for filters
+  const industries = Array.from(new Set(companies?.map(c => c.industry || "General") || []));
+  const plans = Array.from(new Set(companies?.map(c => c.current_subscription_status).filter(Boolean) || []));
+  const classifications = Array.from(new Set(companies?.map((c: any) => c.client_classification).filter(Boolean) || []));
+  const accountStatuses = Array.from(new Set(companies?.map((c: any) => c.account_status).filter(Boolean) || []));
+
+  const whatsappMessage = lastCreatedCreds
+    ? `Hola ${lastCreatedCreds.name},
 
 Tu cuenta para ${lastCreatedCreds.company} ha sido creada.
 
@@ -183,14 +219,8 @@ Contraseña: ${lastCreatedCreds.pass}
 Ingresa aquí:
 ${window.location.origin}/login
 
-Te recomendamos cambiar tu contraseña después de ingresar.`;
-
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
-  };
-
-  const filteredCompanies = companies?.filter((company) =>
-    company.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+Te recomendamos cambiar tu contraseña después de ingresar.`
+    : "";
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-6">
@@ -207,14 +237,60 @@ Te recomendamos cambiar tu contraseña después de ingresar.`;
 
       <Card className="border-none shadow-sm overflow-hidden">
         <CardHeader className="bg-muted/30 pb-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-background border-none shadow-none focus-visible:ring-1"
-            />
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="relative max-w-sm flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-background border-none shadow-none focus-visible:ring-1"
+              />
+            </div>
+
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[180px] bg-background">
+                <SelectValue placeholder="Pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los Estados</SelectItem>
+                <SelectItem value="new_lead">Lead Nuevo</SelectItem>
+                <SelectItem value="contract_pending">Contrato Pendiente</SelectItem>
+                <SelectItem value="onboarding">Onboarding</SelectItem>
+                <SelectItem value="service_activation">Activación</SelectItem>
+                <SelectItem value="active_client">Cliente Activo</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterIndustry} onValueChange={setFilterIndustry}>
+              <SelectTrigger className="w-[150px] bg-background">
+                <SelectValue placeholder="Industria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Industrias</SelectItem>
+                {industries.map(ind => <SelectItem key={ind} value={ind}>{ind}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterPlan} onValueChange={setFilterPlan}>
+              <SelectTrigger className="w-[150px] bg-background">
+                <SelectValue placeholder="Plan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Planes</SelectItem>
+                {plans.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterClassification} onValueChange={setFilterClassification}>
+              <SelectTrigger className="w-[120px] bg-background">
+                <SelectValue placeholder="Clase" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Clases</SelectItem>
+                {classifications.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -227,6 +303,7 @@ Te recomendamos cambiar tu contraseña después de ingresar.`;
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-b">
                   <TableHead className="pl-6 py-4">Empresa / Contacto</TableHead>
+                  <TableHead>Perfil</TableHead>
                   <TableHead>Industria</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Membresía</TableHead>
@@ -247,6 +324,15 @@ Te recomendamos cambiar tu contraseña después de ingresar.`;
                             <Mail className="h-3 w-3" /> {company.contact_email || "N/A"}
                           </div>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="w-[100px] space-y-1.5">
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-muted-foreground uppercase tracking-widest">Perf.</span>
+                          <span>{company.profile_completeness || 0}%</span>
+                        </div>
+                        <Progress value={company.profile_completeness || 0} className="h-1" />
                       </div>
                     </TableCell>
                     <TableCell>
@@ -291,6 +377,23 @@ Te recomendamos cambiar tu contraseña después de ingresar.`;
                           }}
                         >
                           <Rocket className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-emerald-600 hover:text-emerald-700"
+                          onClick={() => {
+                            setWaPhone(company.contact_phone || "+593");
+                            setLastCreatedCreds({
+                              name: company.name,
+                              email: company.contact_email || "",
+                              pass: "********",
+                              company: company.name
+                            });
+                            setIsWhatsappModalOpen(true);
+                          }}
+                        >
+                          <MessageCircle className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -580,58 +683,14 @@ Te recomendamos cambiar tu contraseña después de ingresar.`;
       </Dialog>
 
       {/* WHATSAPP MODAL */}
-      <Dialog open={isWhatsappModalOpen} onOpenChange={setIsWhatsappModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Enviar por WhatsApp</DialogTitle>
-            <DialogDescription>Previsualiza el mensaje y verifica el número de destino.</DialogDescription>
-          </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <FormLabel>Número de Teléfono</FormLabel>
-              <div className="flex gap-2">
-                <Input
-                  value={waPhone}
-                  onChange={(e) => setWaPhone(e.target.value)}
-                  placeholder="+593..."
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground">Formato internacional requerido (ej. +593998887777)</p>
-            </div>
 
-            <div className="space-y-2">
-              <FormLabel>Vista Previa del Mensaje</FormLabel>
-              <div className="bg-muted p-4 rounded-xl text-xs whitespace-pre-wrap font-mono leading-relaxed border">
-                {`Hola ${lastCreatedCreds?.name},
-
-Tu cuenta para ${lastCreatedCreds?.company} ha sido creada.
-
-Acceso al sistema:
-Email: ${lastCreatedCreds?.email}
-Contraseña: ${lastCreatedCreds?.pass}
-
-Ingresa aquí:
-${window.location.origin}/login`}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsWhatsappModalOpen(false)}>Cancelar</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                window.open(generateWhatsAppLink(), "_blank");
-                setIsWhatsappModalOpen(false);
-                setShowCredentials(false);
-              }}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" /> Abrir WhatsApp
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <WhatsappDialog
+        open={isWhatsappModalOpen}
+        onOpenChange={setIsWhatsappModalOpen}
+        phone={waPhone}
+        message={whatsappMessage}
+      />
 
       {/* KICKOFF LINK MODAL */}
       <Dialog open={kickoffModal.open} onOpenChange={(open) => setKickoffModal(prev => ({ ...prev, open }))}>

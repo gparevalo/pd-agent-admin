@@ -241,10 +241,15 @@ export class SupabaseStorage implements IStorage {
     return updated;
   }
 
-  async getAllCompanies(): Promise<Company[]> {
-    const { data, error } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data;
+  async getAllCompanies(): Promise<any[]> {
+    const { data, error } = await supabase.from("client_360_view").select("*").order("name", { ascending: true });
+    // If view doesn't exist or errors, fallback to basic companies
+    if (error) {
+       const { data: cos, error: coErr } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
+       if (coErr) throw new Error(coErr.message);
+       return cos;
+    }
+    return data || [];
   }
 
   async deleteCompany(id: string): Promise<void> {
@@ -971,14 +976,54 @@ export class SupabaseStorage implements IStorage {
   }
 
   async getOperationsClientSteps(operationId: string): Promise<OperationsClientStep[]> {
-    const { data } = await supabase.from("operations_client_steps").select("*").eq("client_operation_id", operationId);
+    const { data } = await supabase.from("operations_client_steps").select("*").eq("client_operation_id", operationId).order("stage_id");
     return data || [];
   }
 
-  async updateOperationsClientStep(id: string, step: Partial<InsertOperationsClientStep>): Promise<OperationsClientStep> {
+  async getOperationStepsGrouped(operationId: string): Promise<Record<string, OperationsClientStep[]>> {
+    const steps = await this.getOperationsClientSteps(operationId);
+    return steps.reduce((acc: Record<string, OperationsClientStep[]>, step) => {
+      const stage = step.stage_id || "unassigned";
+      if (!acc[stage]) acc[stage] = [];
+      acc[stage].push(step);
+      return acc;
+    }, {});
+  }
+
+  async updateOperationsClientStep(id: string, step: Partial<OperationsClientStep>): Promise<OperationsClientStep> {
     const { data, error } = await supabase.from("operations_client_steps").update(step).eq("id", id).select().single();
     if (error) throw new Error(error.message);
     return data;
+  }
+
+  async getOperationStageProgress(operationId: string, stageId: string): Promise<{ done: number; total: number }> {
+    const { data, error } = await supabase
+      .from("operations_client_steps")
+      .select("completed")
+      .eq("client_operation_id", operationId)
+      .eq("stage_id", stageId);
+
+    if (error || !data) return { done: 0, total: 0 };
+    const done = data.filter((s: any) => s.completed).length;
+    return { done, total: data.length };
+  }
+
+  async getProfileCompleteness(companyId: string): Promise<number> {
+    const { data: profile } = await supabase
+      .from("client_profiles")
+      .select("*")
+      .eq("company_id", companyId)
+      .maybeSingle();
+
+    if (!profile) return 0;
+
+    const fieldsToTrack = [
+      "business_description",
+      "ideal_customer",
+      "customer_problem",
+    ];
+    const filledFields = fieldsToTrack.filter((f) => !!profile[f]).length;
+    return Math.round((filledFields / fieldsToTrack.length) * 100);
   }
 
   async getOperationsOnboardings(): Promise<any[]> {
