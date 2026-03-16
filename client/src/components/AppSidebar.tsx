@@ -17,14 +17,20 @@ import { useTheme } from "@/contexts/ThemeContext";
 import {
   Bot,
   Building2,
+  Cpu,
   CreditCard,
   FileText,
   Home,
+  Kanban,
+  Layers,
+  LayoutDashboard,
   LogOut,
   MessageSquare,
   Package,
   Settings,
+  Settings2,
   Tag,
+  UserPlus,
   Users,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -37,11 +43,25 @@ interface MenuItem {
 
 const superadminMenu: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Empresas", url: "/admin/companies", icon: Building2 },
-  { title: "Planes", url: "/admin/plans", icon: FileText },
-  { title: "Suscripciones", url: "/admin/subscriptions", icon: CreditCard },
-  { title: "Descuentos", url: "/admin/discounts", icon: Tag },
+  { title: "Clientes", url: "/admin/companies", icon: Building2 },
   { title: "Usuarios", url: "/admin/users", icon: Users },
+];
+
+const operationsMenu: MenuItem[] = [
+  { title: "Pipeline", url: "/admin/operations/pipeline", icon: Kanban },
+  { title: "CRM Clientes", url: "/admin/operations/crm", icon: Users },
+  { title: "Onboarding", url: "/admin/operations/onboarding", icon: UserPlus },
+  { title: "Activaciones", url: "/admin/operations/services", icon: Settings2 },
+
+];
+
+const aiPlatformMenu: MenuItem[] = [
+  { title: "Workspace", url: "/admin/ai-platform/workspace", icon: Layers },
+  { title: "Agentes Global", url: "/admin/ai-platform/agents", icon: Bot },
+  { title: "Suscripciones", url: "/admin/subscriptions", icon: CreditCard },
+  { title: "Planes", url: "/admin/plans", icon: FileText },
+  { title: "Descuentos", url: "/admin/discounts", icon: Tag },
+
 ];
 
 const companyAdminMenu: MenuItem[] = [
@@ -117,7 +137,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Menú</SidebarGroupLabel>
+          <SidebarGroupLabel>Menú Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
@@ -140,6 +160,60 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {user?.role === "superadmin" && (
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel>Operaciones</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {operationsMenu.map((item) => {
+                    const isActive = location === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive}
+                          data-testid={`nav-ops-${item.title.toLowerCase().replace(" ", "-")}`}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupLabel>AI Platform</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {aiPlatformMenu.map((item) => {
+                    const isActive = location === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive}
+                          data-testid={`nav-ai-${item.title.toLowerCase().replace(" ", "-")}`}
+                        >
+                          <Link href={item.url}>
+                            <item.icon className="h-4 w-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-sidebar-border">

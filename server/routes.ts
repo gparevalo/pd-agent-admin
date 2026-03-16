@@ -118,25 +118,49 @@ export async function registerRoutes(
         return res.status(401).json({ message: "Credenciales inválidas" });
       }
 
+      // Check user status
+      if (user.status !== "active") {
+        return res.status(403).json({ message: "Tu usuario está desactivado. Contacta al administrador." });
+      }
+
       // Get company
       const company = await storage.getCompany(user.company_id);
       if (!company) {
         return res.status(500).json({ message: "Error al obtener empresa" });
       }
 
-      // Get subscription
-      const subscription = await storage.getActiveSubscription(user.company_id);
-      if (!subscription) {
-        return res.status(403).json({ message: "No hay suscripción activa" });
+      // Check company status
+      if (company.status !== "active") {
+        return res.status(403).json({ message: "La empresa está desactivada. Contacta soporte." });
       }
 
-      // Check if subscription expired
-      const endDate = new Date(subscription.end_date);
-      if (endDate < new Date() && subscription.status !== "expired") {
-        await storage.updateSubscription(subscription.id, {
-          status: "expired",
-        });
-        subscription.status = "expired";
+      // Get subscription
+      const subscription = await storage.getActiveSubscription(user.company_id);
+
+      // Allow Superadmins to bypass subscription check? 
+      // Actually, rule 6 says: "Users can access the platform only if... subscriptions.status IN (...)"
+      // But typically superadmins don't need a subscription. 
+      // Rule 6 might only apply to CLIENTE system users.
+
+      if (user.role !== "superadmin") {
+        if (!subscription) {
+          return res.status(403).json({ message: "No hay suscripción activa o válida para esta cuenta." });
+        }
+
+        const validStatuses = ["active", "trial", "grace_period"];
+        if (!validStatuses.includes(subscription.status)) {
+          return res.status(403).json({ message: `Tu suscripción está ${subscription.status}. Contacta a administración.` });
+        }
+
+        // Check if subscription expired
+        const endDate = new Date(subscription.end_date);
+        if (endDate < new Date()) {
+          // If it's expired by date, update status if not already handled
+          if (subscription.status !== "expired" && subscription.status !== "cancelled") {
+            await storage.updateSubscription(subscription.id, { status: "expired" });
+            return res.status(403).json({ message: "Tu suscripción ha expirado." });
+          }
+        }
       }
 
       // Generate token
@@ -162,67 +186,315 @@ export async function registerRoutes(
     }
   });
 
-  // ========== COMPANY ROUTES ==========
+  // ========== ADMIN MANAGEMENT ROUTES (COMPANIES & USERS) ==========
 
   app.get(
-    "/api/company/theme",
+    "/api/admin/companies",
     authMiddleware as any,
-    async (req: AuthRequest, res) => {
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
       try {
-        const company = await storage.getCompany(req.user!.company_id);
-        if (!company) {
-          return res.status(404).json({ message: "Empresa no encontrada" });
-        }
-        // Return theme-compatible response
-        res.json({
-          company_name: company.name,
-          primary_color: "#E10600", // Default red
-          secondary_color: "#111111", // Default black
-          logo_url: company.logo_url,
-          ...company,
+        const companies = await storage.getAllCompanies();
+        const subscriptions = await storage.getAllSubscriptions();
+
+        const enrichedCompanies = companies.map(c => {
+          const sub = subscriptions
+            .filter(s => s.company_id === c.id)
+            .sort((a, b) => {
+              const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+              return dateB - dateA;
+            })[0];
+
+          return {
+            ...c,
+            current_subscription_status: sub ? sub.status : "none"
+          };
         });
+
+        res.json(enrichedCompanies);
       } catch (error) {
-        res.status(500).json({ message: "Error al obtener tema" });
+        res.status(500).json({ message: "Error al obtener empresas" });
       }
-    },
+    }
   );
 
-  app.put(
-    "/api/company/theme",
+  app.post(
+    "/api/admin/companies",
     authMiddleware as any,
-    roleMiddleware("company_admin", "superadmin") as any,
+    roleMiddleware("superadmin") as any,
     async (req: AuthRequest, res) => {
       try {
-        const {
-          company_name,
-          logo_url,
-          website,
-          contact_email,
-          contact_phone,
-          address,
-        } = req.body;
+        const { company: companyData, admin: adminData } = req.body;
 
-        const updated = await storage.updateCompany(req.user!.company_id, {
-          name: company_name,
-          logo_url: logo_url || null,
-          website: website || null,
-          contact_email: contact_email || null,
-          contact_phone: contact_phone || null,
-          address: address || null,
+        // 1. Create Company
+        const company = await storage.createCompany({
+          ...companyData,
+          status: companyData.status || "active",
         });
 
-        if (!updated) {
-          return res.status(404).json({ message: "Empresa no encontrada" });
-        }
+        // 2. Create Admin User
+        const hashedPassword = await bcrypt.hash(adminData.password, 10);
+        const admin = await storage.createUser({
+          company_id: company.id,
+          email: adminData.email,
+          name: adminData.name,
+          password_hash: hashedPassword,
+          role: "company_admin",
+          status: "active",
+          system: "CLIENTE",
+        });
 
+        // Log action
+        await storage.logSecurityAction({
+          user_id: req.user!.id,
+          company_id: company.id,
+          action: "company_provisioned",
+          details: { company_id: company.id, admin_id: admin.id }
+        });
+
+        res.json({ company, admin });
+      } catch (error) {
+        console.error("Provisioning error:", error);
+        res.status(500).json({ message: "Error al crear empresa y administrador" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/companies/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const company = await storage.getCompany(req.params.id as string);
+        if (!company) return res.status(404).json({ message: "Empresa no encontrada" });
+        res.json(company);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener empresa" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/admin/companies/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const updated = await storage.updateCompany(req.params.id as string, req.body);
         res.json(updated);
       } catch (error) {
-        res.status(500).json({ message: "Error al actualizar tema" });
+        res.status(500).json({ message: "Error al actualizar empresa" });
       }
-    },
+    }
+  );
+
+  app.get(
+    "/api/admin/companies/:id/users",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const users = await storage.getCompanyUsers(req.params.id as string);
+        const filteredUsers = users.filter(u => u.system !== "ADMIN");
+        res.json(filteredUsers);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener usuarios" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/companies/:id/users",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { email, password, name, role } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const user = await storage.createUser({
+          company_id: req.params.id as string,
+          email,
+          name,
+          password_hash: hashedPassword,
+          role: role || "company_user",
+          status: "active",
+          system: "CLIENTE",
+        });
+
+        await storage.logSecurityAction({
+          user_id: req.user!.id,
+          company_id: req.params.id as string,
+          action: "user_created",
+          details: { new_user_id: user.id }
+        });
+
+        res.json(user);
+      } catch (error) {
+        res.status(500).json({ message: "Error al crear usuario" });
+      }
+    }
+  );
+
+  // Platform Admins
+  app.get(
+    "/api/admin/users/superadmins",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const admins = await storage.getSuperadmins();
+        res.json(admins);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener superadmins" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/users/superadmins",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { email, password, name } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const admin = await storage.createUser({
+          company_id: req.user!.company_id, // Assigned to system company
+          email,
+          name,
+          password_hash: hashedPassword,
+          role: "superadmin",
+          status: "active",
+          system: "ADMIN",
+        });
+
+        res.json(admin);
+      } catch (error) {
+        res.status(500).json({ message: "Error al crear superadmin" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/admin/users/:id/status",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const updated = await storage.updateUser(req.params.id as string, { status: req.body.status });
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al actualizar estado de usuario" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/users/:id/reset-password",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { password } = req.body;
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await storage.updateUser(req.params.id as string, { password_hash: hashedPassword });
+
+        await storage.logSecurityAction({
+          user_id: req.user!.id,
+          company_id: "SYSTEM",
+          action: "password_reset",
+          details: { target_user_id: req.params.id as string }
+        });
+
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ message: "Error al resetear password" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/admin/users/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        await storage.deleteUser(req.params.id as string);
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ message: "Error al eliminar usuario" });
+      }
+    }
   );
 
   // ========== SUBSCRIPTION ROUTES ==========
+
+  app.post(
+    "/api/admin/subscriptions",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const {
+          company_id,
+          plan_id,
+          billing_cycle,
+          start_date,
+          end_date,
+          base_price,
+          final_price,
+          status,
+          setup_fee_paid,
+        } = req.body;
+
+        const plan = await storage.getPlan(plan_id);
+        if (!plan) return res.status(404).json({ message: "Plan no encontrado" });
+
+        // Check for existing active/trial/grace subscription
+        const existingSub = await storage.getActiveSubscription(company_id);
+        if (existingSub) {
+          const blockedStatuses = ["active", "trial", "grace_period"];
+          if (blockedStatuses.includes(existingSub.status)) {
+            return res.status(400).json({
+              message: `La empresa ya tiene una suscripción vigente (${existingSub.status}). Debe cancelarla antes de asignar una nueva.`
+            });
+          }
+        }
+
+        const subscription = await storage.createSubscription({
+          company_id,
+          plan_id,
+          billing_cycle,
+          start_date,
+          end_date,
+          base_price: base_price?.toString() || "0",
+          final_price: final_price?.toString() || "0",
+          status: status || "active",
+          setup_fee_paid: setup_fee_paid?.toString() || "0",
+          snapshot_limits: plan.default_limits as any,
+          snapshot_features: plan.default_features as any,
+          system: "company",
+        });
+
+        await storage.logSecurityAction({
+          user_id: req.user!.id,
+          company_id: company_id,
+          action: "subscription_created_admin",
+          target_id: subscription.id,
+          details: { plan_id, billing_cycle },
+        });
+
+        res.json(subscription);
+      } catch (error) {
+        console.error("Admin subscription creation error:", error);
+        res.status(500).json({ message: "Error al crear suscripción" });
+      }
+    },
+  );
 
   app.get(
     "/api/subscription/current",
@@ -375,16 +647,235 @@ export async function registerRoutes(
     },
   );
 
+  // ========== ADMIN SUBSCRIPTION ROUTES ==========
+  app.get(
+    "/api/admin/subscriptions/dashboard",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const kpis = await storage.getAdminSubscriptionDashboardKPIs();
+        const subscriptions = await storage.getAdminSubscriptionsDetails();
+        res.json({ kpis, subscriptions });
+      } catch (error) {
+        console.error("Admin dashboard error:", error);
+        res
+          .status(500)
+          .json({ message: "Error al obtener dashboard de suscripciones" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/subscriptions/:id/plan",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const { plan_id } = req.body;
+
+        const plan = await storage.getPlan(plan_id as string);
+        if (!plan)
+          return res.status(404).json({ message: "Plan no encontrado" });
+
+        const updated = await storage.updateSubscription(id as string, {
+          plan_id: plan_id as string,
+          snapshot_limits: plan.default_limits as any,
+          snapshot_features: plan.default_features as any,
+        });
+
+        await storage.logSecurityAction({
+          company_id: updated?.company_id || req.user!.company_id,
+          user_id: req.user!.id,
+          action: "subscription_plan_changed",
+          target_id: id as string,
+          details: { new_plan_id: plan_id },
+        });
+
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al cambiar plan" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/subscriptions/:id/addons",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const { addon_name, price } = req.body;
+
+        const addon = await storage.addSubscriptionAddon({
+          subscription_id: id as string,
+          addon_name,
+          price: price || "0",
+        });
+
+        await storage.logSecurityAction({
+          company_id: req.user!.company_id,
+          user_id: req.user!.id,
+          action: "addon_added",
+          target_id: id as string,
+          details: { addon_name },
+        });
+
+        res.json(addon);
+      } catch (error) {
+        res.status(500).json({ message: "Error al agregar addon" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/subscriptions/:id/addons/:addonId",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id, addonId } = req.params;
+        await storage.removeSubscriptionAddon(addonId);
+
+        await storage.logSecurityAction({
+          company_id: req.user!.company_id,
+          user_id: req.user!.id,
+          action: "addon_removed",
+          target_id: id as string,
+          details: { addon_id: addonId },
+        });
+        res.json({ success: true });
+      } catch (error) {
+        res.status(500).json({ message: "Error al eliminar addon" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/subscriptions/:id/grace-period",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const { end_date } = req.body;
+
+        const updated = await storage.updateSubscription(id, {
+          end_date,
+          status: "grace_period",
+        });
+
+        await storage.logSecurityAction({
+          company_id: updated?.company_id || req.user!.company_id,
+          user_id: req.user!.id,
+          action: "grace_period_granted",
+          target_id: id as string,
+          details: { end_date },
+        });
+
+        res.json(updated);
+      } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Error al extender grace period" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/subscriptions/:id/cancel",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+
+        const updated = await storage.updateSubscription(id, {
+          status: "cancelled",
+        });
+
+        await storage.logSecurityAction({
+          company_id: updated?.company_id || req.user!.company_id,
+          user_id: req.user!.id,
+          action: "subscription_cancelled",
+          target_id: id as string,
+        });
+
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al cancelar suscripcion" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/subscriptions/:id/discounts",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const { discount_code, amount } = req.body;
+
+        const discountItem = await storage.addSubscriptionDiscount({
+          subscription_id: id as string,
+          discount_code,
+          amount,
+        });
+
+        // Also update final_price on the subscription
+        const sub = await storage.getSubscription(id);
+        if (sub) {
+          const currentPrice = parseFloat(sub.final_price || "0");
+          const discountAmt = parseFloat(amount || "0");
+          const newPrice = Math.max(0, currentPrice - discountAmt);
+          await storage.updateSubscription(id, {
+            final_price: newPrice.toString(),
+          });
+        }
+
+        await storage.logSecurityAction({
+          company_id: req.user!.company_id,
+          user_id: req.user!.id,
+          action: "discount_applied",
+          target_id: id as string,
+          details: { discount_code, amount },
+        });
+
+        res.json(discountItem);
+      } catch (error) {
+        res.status(500).json({ message: "Error al aplicar descuento" });
+      }
+    },
+  );
+
   // ========== PLANS ROUTES ==========
 
   app.get("/api/plans", authMiddleware as any, async (req, res) => {
     try {
-      const plans = await storage.getAllPlans();
+      const plans = await storage.getPlans();
       res.json(plans);
     } catch (error) {
       res.status(500).json({ message: "Error al obtener planes" });
     }
   });
+
+  app.put(
+    "/api/admin/plans/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const updates = req.body;
+        const updated = await storage.updatePlan(id, updates);
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al actualizar plan" });
+      }
+    },
+  );
 
   // ========== DISCOUNT ROUTES ==========
 
@@ -448,6 +939,31 @@ export async function registerRoutes(
     },
   );
 
+  app.get("/api/admin/discounts", authMiddleware as any, async (req, res) => {
+    try {
+      const discounts = await storage.getAllDiscountCodes();
+      res.json(discounts);
+    } catch (error) {
+      res.status(500).json({ message: "Error al obtener descuentos" });
+    }
+  });
+
+  app.put(
+    "/api/admin/discounts/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "company_admin") as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const updates = req.body;
+        const updated = await storage.updateDiscountCode(id, updates);
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al actualizar descuento" });
+      }
+    },
+  );
+
   // ========== LEADS ROUTES ==========
 
   app.get(
@@ -495,39 +1011,38 @@ export async function registerRoutes(
   );
 
   app.put(
-  "/api/leads/:id",
-  authMiddleware as any,
-  subscriptionMiddleware as any,
-  async (req: AuthRequest, res) => {
-    try {
-      const { id } = req.params;
-      const { name, email, phone, source, lead_type, status } = req.body;
+    "/api/leads/:id",
+    authMiddleware as any,
+    subscriptionMiddleware as any,
+    async (req: AuthRequest, res) => {
+      try {
+        const { id } = req.params;
+        const { name, email, phone, source, lead_type, status } = req.body;
 
-      if (!name) {
-        return res.status(400).json({ message: "El nombre es requerido" });
+        if (!name) {
+          return res.status(400).json({ message: "El nombre es requerido" });
+        }
+
+        const updatedLead = await storage.updateLead(id, {
+          name,
+          email: email || null,
+          phone: phone || null,
+          source: source || null,
+          lead_type: lead_type || "low",
+          status: status || "new",
+        });
+
+        if (!updatedLead) {
+          return res.status(404).json({ message: "Lead no encontrado" });
+        }
+
+        res.json(updatedLead);
+      } catch (error) {
+        console.error("Update lead error:", error);
+        res.status(500).json({ message: "Error al actualizar lead" });
       }
-
-      const updatedLead = await storage.updateLead(id, {
-        name,
-        email: email || null,
-        phone: phone || null,
-        source: source || null,
-        lead_type: lead_type || "low",
-        status: status || "new",
-      });
-
-      if (!updatedLead) {
-        return res.status(404).json({ message: "Lead no encontrado" });
-      }
-
-      res.json(updatedLead);
-    } catch (error) {
-      console.error("Update lead error:", error);
-      res.status(500).json({ message: "Error al actualizar lead" });
-    }
-  }
-);
-
+    },
+  );
 
   // ========== CONVERSATIONS ROUTES ==========
 
@@ -563,7 +1078,7 @@ export async function registerRoutes(
         }
 
         const messages = await storage.getMessagesByConversation(
-          conversationId as string,
+          conversationId as string
         );
 
         res.json(messages);
@@ -815,7 +1330,7 @@ export async function registerRoutes(
   // ========== CATALOG ROUTES ==========
 
   app.get(
-    "/api/catalog/:companyId",
+    "/api/admin/catalog/:companyId",
     authMiddleware as any,
     subscriptionMiddleware as any,
     async (req: AuthRequest, res) => {
@@ -1079,6 +1594,48 @@ export async function registerRoutes(
 
   // Admin - Subscriptions
   app.get(
+    "/api/admin/companies/:id/users",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const users = await storage.getUsersByCompany(req.params.id as string);
+        res.json(users);
+      } catch (error) {
+        res.status(500).json({ message: "Error al listar usuarios" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/companies/:id/activity",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const logs = await storage.getActivityLogs(req.params.id as string);
+        res.json(logs);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener logs de actividad" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/companies/:id/subscriptions",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const sub = await storage.getSubscriptionByCompany(req.params.id as string);
+        res.json(sub);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener suscripción" });
+      }
+    }
+  );
+
+  app.get(
     "/api/admin/subscriptions",
     authMiddleware as any,
     roleMiddleware("superadmin") as any,
@@ -1091,6 +1648,186 @@ export async function registerRoutes(
       }
     },
   );
+
+  // Kickoff System - Admin
+  app.post(
+    "/api/admin/companies/:id/kickoff-token",
+    authMiddleware as any,
+    roleMiddleware("superadmin", "admin") as any,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const secret = process.env.SESSION_SECRET || "kickoff_secret_key_pd";
+        const crypto = await import("crypto");
+        const hmac = crypto.createHmac("sha256", secret);
+        hmac.update(id);
+        const signature = hmac.digest("hex");
+        const token = `${id}.${signature}`;
+        res.json({ token });
+      } catch (error) {
+        res.status(500).json({ message: "Error al generar token de kickoff" });
+      }
+    }
+  );
+
+  // Kickoff System - Public
+  app.get("/api/public/kickoff/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const [id, signature] = token.split(".");
+      const secret = process.env.SESSION_SECRET || "kickoff_secret_key_pd";
+      const crypto = await import("crypto");
+      const hmac = crypto.createHmac("sha256", secret);
+      hmac.update(id);
+      const expectedSignature = hmac.digest("hex");
+
+      if (signature !== expectedSignature) {
+        return res.status(401).json({ message: "Token inválido o expirado" });
+      }
+
+      const company = await storage.getCompany(id);
+      if (!company) return res.status(404).json({ message: "Empresa no encontrada" });
+
+      const profiles = await storage.getClientProfile(id);
+      const allCatalog = await storage.getCatalogByCompany(id);
+      const strategies = await storage.getClientStrategies(id);
+      const results = await storage.getClientResults(id);
+
+      const strategy = strategies.length > 0 ? strategies[0] : null;
+      const result = results.length > 0 ? results[0] : null;
+
+      const services = allCatalog
+        .filter(item => item.item_type === "service")
+        .map(s => ({
+          name: s.name,
+          problem_solved: s.description,
+          customer_benefits: s.details?.includes?.[0] || "",
+          average_price: parseInt(s.base_price || "0")
+        }));
+
+      res.json({
+        company: { id: company.id, name: company.name },
+        existingData: {
+          profile: profiles ? {
+            ...profiles,
+            customer_pain_points: (profiles as any).customer_characteristics
+          } : undefined,
+          services: services.length > 0 ? services : undefined,
+          strategy,
+          results: result ? {
+            ...result,
+            sales_cycle_duration: (result as any).sales_cycle,
+            sales_objections: (result as any).purchase_decision_factor,
+            marketing_actions: (result as any).previous_marketing_actions,
+            customer_satisfaction_measurement: (result as any).best_marketing_results,
+            referral_process: (result as any).lead_sources,
+            customer_questions: (result as any).frequent_customer_questions,
+            valuable_resource: (result as any).important_client_knowledge
+          } : undefined
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error al validar token" });
+    }
+  });
+
+  app.post("/api/public/kickoff/:token/submit", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { profile, services, strategy, results } = req.body;
+      const [id, signature] = token.split(".");
+      const secret = process.env.SESSION_SECRET || "kickoff_secret_key_pd";
+      const crypto = await import("crypto");
+      const hmac = crypto.createHmac("sha256", secret);
+      hmac.update(id);
+      const expectedSignature = hmac.digest("hex");
+
+      if (signature !== expectedSignature) {
+        return res.status(401).json({ message: "Token inválido" });
+      }
+
+      const companyId = id;
+
+      // 1. Save Profile (Mapping customer_pain_points to customer_characteristics)
+      await storage.upsertClientProfile({
+        company_id: companyId,
+        business_description: profile.business_description,
+        ideal_customer: profile.ideal_customer,
+        customer_problem: profile.customer_problem,
+        customer_characteristics: profile.customer_pain_points, // Mapped
+      } as any);
+
+      // 2. Save Services in Catalog
+      if (services && Array.isArray(services)) {
+        await storage.deleteCatalogItemsByType(companyId, "service");
+        for (const s of services) {
+          await storage.createCatalogItem({
+            company_id: companyId,
+            item_type: "service",
+            name: s.name,
+            description: s.problem_solved,
+            base_price: s.average_price?.toString() || "0",
+            is_active: true,
+            details: {
+              includes: [s.customer_benefits],
+              restrictions: [],
+              estimated_time: ""
+            }
+          });
+        }
+      }
+
+      // 3. Save Strategy (Mapping fields)
+      if (strategy) {
+        await storage.upsertClientStrategy({
+          company_id: companyId,
+          strategy_name: "Kickoff Strategy",
+          status: "active",
+          project_reason: strategy.project_reason,
+          expected_results: strategy.expected_results,
+          project_goals: strategy.project_goals
+        });
+      }
+
+      // 4. Save Results (Mapping to existing schema)
+      if (results) {
+        await storage.upsertClientResult({
+          company_id: companyId,
+          sales_process: results.sales_process,
+          sales_cycle: results.sales_cycle_duration, // Mapped
+          purchase_decision_factor: results.sales_objections, // Mapped
+          previous_marketing_actions: results.marketing_actions, // Mapped
+          best_marketing_results: results.customer_satisfaction_measurement, // Mapped
+          lead_sources: results.referral_process, // Mapped
+          frequent_customer_questions: results.customer_questions, // Mapped
+          important_client_knowledge: results.valuable_resource // Mapped
+        });
+      }
+
+      // 5. Update Onboarding status
+      const onboarding = await storage.getOperationsOnboardingByCompany(companyId);
+      if (onboarding) {
+        await storage.upsertOperationsOnboarding({
+          ...onboarding,
+          status: "kickoff_completed"
+        });
+      }
+
+      // 6. Log Activity
+      await storage.createActivityLog({
+        company_id: companyId,
+        event_type: "kickoff_completed",
+        event_description: "Formulario de Kickoff Estratégico enviado vía enlace público",
+        metadata: { submitted_at: new Date().toISOString() }
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Kickoff submission error:", error);
+      res.status(500).json({ message: "Error al procesar el kickoff" });
+    }
+  });
+
 
   // Admin - Users
   app.get(
@@ -1107,6 +1844,198 @@ export async function registerRoutes(
         res.json(usersWithoutPasswords);
       } catch (error) {
         res.status(500).json({ message: "Error al obtener usuarios" });
+      }
+    },
+  );
+
+  // ========== ADMIN OPERATIONAL ROUTES ==========
+
+  // Pipeline
+  app.get(
+    "/api/admin/client-operations/pipeline",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const pipeline = await storage.getOperationsPipeline();
+        res.json(pipeline);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener pipeline" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/client-operations/pipeline/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const op = await storage.getOperationsClient(req.params.id);
+        if (!op) return res.status(404).json({ message: "Operación no encontrada" });
+        const steps = await storage.getOperationsClientSteps(op.id);
+        res.json({ ...op, steps });
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener detalle de operación" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/client-operations/pipeline/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const updated = await storage.updateOperationsClient(req.params.id, req.body);
+        res.json(updated);
+      } catch (error) {
+        console.error("Error updating operation:", error);
+        res.status(500).json({ message: "Error al actualizar operación" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/client-operations/pipeline",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const op = await storage.createOperationsClient(req.body);
+        res.status(201).json(op);
+      } catch (error) {
+        res.status(500).json({ message: "Error al crear operación" });
+      }
+    },
+  );
+
+  // CRM Clients
+  app.get(
+    "/api/admin/client-operations/clients",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const companies = await storage.getAllCompanies();
+        const profiles = await Promise.all(
+          companies.map(async (c) => {
+            const profile = await storage.getClientProfile(c.id);
+            return {
+              company_id: c.id,
+              company_name: c.name,
+              industry: c.industry || profile?.industry,
+              city_country: profile?.city_country,
+              client_classification: profile?.client_classification,
+              account_status: profile?.account_status,
+              agency_start_date: profile?.agency_start_date,
+            };
+          })
+        );
+        res.json(profiles);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener listado de clientes" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/client-operations/client-360/:company_id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const companyId = req.params.company_id;
+        const view = await storage.getClient360(companyId);
+
+        // Fetch details that might not be in the view
+        const profile = await storage.getClientProfile(companyId);
+        const contacts = await storage.getClientContacts(companyId);
+        const services = await storage.getClientServices(companyId);
+        const strategies = await storage.getClientStrategies(companyId);
+        const results = await storage.getClientResults(companyId);
+        const activity = await storage.getActivityLogs(companyId);
+        const onboarding = await storage.getOperationsOnboardingByCompany(companyId);
+
+        // Fetch pipeline status
+        const pipeline = await storage.getOperationsPipeline();
+        const companyOp = pipeline.find(op => op.company_id === companyId);
+
+        const strategy = strategies.length > 0 ? strategies[0] : null;
+        const result = results.length > 0 ? results[0] : null;
+
+        res.json({
+          ...view,
+          pipeline_status: companyOp?.status || "new_lead",
+          summary: view,
+          profile: profile ? {
+            ...profile,
+            ...view, // Merge view data into profile for metrics like months_active, total_ltv
+            customer_pain_points: (profile as any).customer_characteristics
+          } : (view ? { ...view } : null),
+          contacts,
+          services,
+          strategy,
+          onboarding,
+          results: result ? {
+            ...result,
+            sales_cycle_duration: (result as any).sales_cycle,
+            sales_objections: (result as any).purchase_decision_factor,
+            marketing_actions: (result as any).previous_marketing_actions,
+            customer_satisfaction_measurement: (result as any).best_marketing_results,
+            referral_process: (result as any).lead_sources,
+            customer_questions: (result as any).frequent_customer_questions,
+            valuable_resource: (result as any).important_client_knowledge
+          } : null,
+          activity
+        });
+      } catch (error) {
+        console.error("Client 360 error:", error);
+        res.status(500).json({ message: "Error al obtener vista 360" });
+      }
+    },
+  );
+
+  // Onboarding
+  app.get(
+    "/api/admin/client-operations/onboarding",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const onboardings = await storage.getOperationsOnboardings();
+        res.json(onboardings);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener onboardings" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/client-operations/onboarding/:id",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const updated = await storage.upsertOperationsOnboarding({ ...req.body, id: req.params.id });
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ message: "Error al actualizar onboarding" });
+      }
+    },
+  );
+
+  // Service Activations
+  app.get(
+    "/api/admin/client-operations/services",
+    authMiddleware as any,
+    roleMiddleware("superadmin") as any,
+    async (req, res) => {
+      try {
+        const services = await storage.getOperationsServiceActivations();
+        res.json(services);
+      } catch (error) {
+        res.status(500).json({ message: "Error al obtener activaciones de servicios" });
       }
     },
   );

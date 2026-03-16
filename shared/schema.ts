@@ -4,11 +4,43 @@ import {
   decimal,
   integer,
   jsonb,
+  numeric,
+  pgEnum,
   pgTable,
   text,
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
+
+// --- ENUMS ---
+export const accountStatusEnum = pgEnum("account_status_enum", ["active", "paused", "inactive"]);
+export const clientClassificationEnum = pgEnum("client_classification_enum", ["AAA", "AA", "A", "B", "C"]);
+export const operationStatusEnum = pgEnum("operation_status_enum", [
+  "new_lead",
+  "contract_pending",
+  "onboarding",
+  "service_activation",
+  "active_client",
+  "churned"
+]);
+export const onboardingStatusEnum = pgEnum("onboarding_status_enum", [
+  "pending",
+  "team_assigned",
+  "resources_created",
+  "kickoff_scheduled",
+  "kickoff_completed",
+  "strategy_started"
+]);
+export const serviceActivationStatusEnum = pgEnum("service_activation_status_enum", [
+  "service_registered",
+  "invoice_created",
+  "sent_to_client",
+  "payment_pending",
+  "payment_received",
+  "ticket_sent_to_IT",
+  "development_in_progress",
+  "service_delivered"
+]);
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -45,6 +77,7 @@ export const users = pgTable("users", {
   password_hash: text("password_hash").notNull(),
   role: varchar("role", { length: 30 }).notNull().default("client_admin"),
   status: varchar("status", { length: 20 }).default("active"),
+  system: varchar("system", { length: 20 }).default("CLIENTE"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -71,6 +104,7 @@ export const plans = pgTable("plans", {
   base_price_annual: decimal("base_price_annual", { precision: 10, scale: 2 }),
   default_limits: jsonb("default_limits"),
   default_features: jsonb("default_features"),
+  is_active: boolean("is_active").default(true),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -85,7 +119,8 @@ export type Plan = typeof plans.$inferSelect;
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey(),
   company_id: varchar("company_id").notNull(),
-  plan_id: varchar("lan_id"),
+  plan_id: varchar("plan_id"),
+  system: varchar("system", { length: 20 }).default("company"),
   billing_cycle: varchar("billing_cycle", { length: 20 })
     .notNull()
     .default("trial"),
@@ -94,6 +129,9 @@ export const subscriptions = pgTable("subscriptions", {
   start_date: date("start_date").notNull(),
   end_date: date("end_date").notNull(),
   status: varchar("status", { length: 20 }).notNull().default("trial"),
+  setup_fee_paid: decimal("setup_fee_paid", { precision: 10, scale: 2 }).default("0"),
+  snapshot_limits: jsonb("snapshot_limits"),
+  snapshot_features: jsonb("snapshot_features"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -103,6 +141,76 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
 });
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
+
+// Subscription Addons table
+export const subscriptionItemsAddons = pgTable("subscription_items_addons", {
+  id: varchar("id").primaryKey(),
+  subscription_id: varchar("subscription_id").notNull(),
+  addon_name: varchar("addon_name", { length: 150 }).notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).default("0"),
+  activated_at: timestamp("activated_at").defaultNow(),
+});
+
+export const insertSubscriptionAddonSchema = createInsertSchema(subscriptionItemsAddons).omit({
+  id: true,
+  activated_at: true,
+});
+export type InsertSubscriptionAddon = z.infer<typeof insertSubscriptionAddonSchema>;
+export type SubscriptionAddon = typeof subscriptionItemsAddons.$inferSelect;
+
+// Subscription Discounts table
+export const subscriptionDiscounts = pgTable("subscription_discounts", {
+  id: varchar("id").primaryKey(),
+  subscription_id: varchar("subscription_id").notNull(),
+  discount_code: varchar("discount_code", { length: 50 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  applied_at: timestamp("applied_at").defaultNow(),
+});
+
+export const insertSubscriptionDiscountSchema = createInsertSchema(subscriptionDiscounts).omit({
+  id: true,
+  applied_at: true,
+});
+export type InsertSubscriptionDiscount = z.infer<typeof insertSubscriptionDiscountSchema>;
+export type SubscriptionDiscount = typeof subscriptionDiscounts.$inferSelect;
+
+// Membership Usage table
+export const membershipUsage = pgTable("membership_usage", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull(),
+  subscription_id: varchar("subscription_id").notNull(),
+  messages: integer("messages").default(0),
+  agents: integer("agents").default(0),
+  integrations: integer("integrations").default(0),
+  storage: decimal("storage", { precision: 10, scale: 2 }).default("0"), // e.g. MB
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMembershipUsageSchema = createInsertSchema(membershipUsage).omit({
+  id: true,
+  updated_at: true,
+});
+export type InsertMembershipUsage = z.infer<typeof insertMembershipUsageSchema>;
+export type MembershipUsage = typeof membershipUsage.$inferSelect;
+
+// Security Logs table
+export const securityLogs = pgTable("security_logs", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull(),
+  user_id: varchar("user_id").notNull(),
+  action: varchar("action", { length: 100 }).notNull(),
+  target_id: varchar("target_id", { length: 100 }), // The entity affected (e.g., subscription_id)
+  details: jsonb("details"), // Store what changed
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertSecurityLogSchema = createInsertSchema(securityLogs).omit({
+  id: true,
+  created_at: true,
+});
+export type InsertSecurityLog = z.infer<typeof insertSecurityLogSchema>;
+export type SecurityLog = typeof securityLogs.$inferSelect;
+
 
 // Discount codes table - matches Supabase schema (discount_codes, not discounts)
 export const discountCodes = pgTable("discount_codes", {
@@ -220,6 +328,219 @@ export const insertAgentSchema = createInsertSchema(agents).omit({
 });
 export type InsertAgent = z.infer<typeof insertAgentSchema>;
 export type Agent = typeof agents.$inferSelect;
+
+// --- CLIENT CRM TABLES ---
+
+export const clientProfiles = pgTable("client_profiles", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  industry: text("industry"),
+  city_country: text("city_country"),
+  website: text("website"),
+  social_media: text("social_media"),
+  brand_kit_url: text("brand_kit_url"),
+  client_classification: clientClassificationEnum("client_classification"),
+  agency_start_date: date("agency_start_date"),
+  account_status: accountStatusEnum("account_status"),
+  client_personality: text("client_personality"),
+  client_values: text("client_values"),
+  client_dislikes: text("client_dislikes"),
+  idea_presentation_style: text("idea_presentation_style"),
+  business_description: text("business_description"),
+  business_age: text("business_age"),
+  business_origin: text("business_origin"),
+  main_product_service: text("main_product_service"),
+  business_differentiation: text("business_differentiation"),
+  main_competitors: text("main_competitors"),
+  competitor_strengths: text("competitor_strengths"),
+  company_strengths: text("company_strengths"),
+  ideal_customer: text("ideal_customer"),
+  customer_characteristics: text("customer_characteristics"),
+  customer_problem: text("customer_problem"),
+  customer_objections: text("customer_objections"),
+  purchase_trigger: text("purchase_trigger"),
+  future_target_customer: text("future_target_customer"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertClientProfileSchema = createInsertSchema(clientProfiles).omit({ id: true, created_at: true });
+export type InsertClientProfile = z.infer<typeof insertClientProfileSchema>;
+export type ClientProfile = typeof clientProfiles.$inferSelect;
+
+export const clientContacts = pgTable("client_contacts", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  contact_name: text("contact_name"),
+  role: text("role"),
+  email: text("email"),
+  phone: text("phone"),
+  notes: text("notes"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertClientContactSchema = createInsertSchema(clientContacts).omit({ id: true, created_at: true });
+export type InsertClientContact = z.infer<typeof insertClientContactSchema>;
+export type ClientContact = typeof clientContacts.$inferSelect;
+
+export const clientServices = pgTable("client_services", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  service_name: text("service_name"),
+  plan_type: text("plan_type"),
+  start_date: date("start_date"),
+  end_date: date("end_date"),
+  notes: text("notes"),
+  top_selling_service: text("top_selling_service"),
+  problem_solved: text("problem_solved"),
+  customer_benefits: text("customer_benefits"),
+  average_price: text("average_price"),
+  priority_service: text("priority_service"),
+  seasonality: text("seasonality"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertClientServiceSchema = createInsertSchema(clientServices).omit({ id: true, created_at: true });
+export type InsertClientService = z.infer<typeof insertClientServiceSchema>;
+export type ClientService = typeof clientServices.$inferSelect;
+
+export const clientStrategies = pgTable("client_strategies", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  strategy_name: text("strategy_name"),
+  description: text("description"),
+  status: text("status"),
+  start_date: date("start_date"),
+  project_reason: text("project_reason"),
+  expected_results: text("expected_results"),
+  project_goals: text("project_goals"),
+  success_scenario: text("success_scenario"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertClientStrategySchema = createInsertSchema(clientStrategies).omit({ id: true, created_at: true });
+export type InsertClientStrategy = z.infer<typeof insertClientStrategySchema>;
+export type ClientStrategy = typeof clientStrategies.$inferSelect;
+
+export const clientResults = pgTable("client_results", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  period: text("period"),
+  metric: text("metric"),
+  value: text("value"),
+  notes: text("notes"),
+  lead_sources: text("lead_sources"),
+  acquisition_channels: text("acquisition_channels"),
+  sales_process: text("sales_process"),
+  sales_responsible: text("sales_responsible"),
+  sales_cycle: text("sales_cycle"),
+  purchase_decision_factor: text("purchase_decision_factor"),
+  previous_marketing_actions: text("previous_marketing_actions"),
+  best_marketing_results: text("best_marketing_results"),
+  failed_marketing_actions: text("failed_marketing_actions"),
+  active_channels: text("active_channels"),
+  content_types: text("content_types"),
+  ads_history: text("ads_history"),
+  frequent_customer_questions: text("frequent_customer_questions"),
+  common_customer_mistakes: text("common_customer_mistakes"),
+  important_client_knowledge: text("important_client_knowledge"),
+  unknown_service_facts: text("unknown_service_facts"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertClientResultSchema = createInsertSchema(clientResults).omit({ id: true, created_at: true });
+export type InsertClientResult = z.infer<typeof insertClientResultSchema>;
+export type ClientResult = typeof clientResults.$inferSelect;
+
+// --- OPERATIONS PIPELINE TABLES ---
+
+export const operationsClients = pgTable("operations_clients", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  client_name: text("client_name"),
+  company_name: text("company_name"),
+  service_contracted: text("service_contracted"),
+  client_classification: clientClassificationEnum("client_classification"),
+  contract_duration: text("contract_duration"),
+  plan_price: numeric("plan_price"),
+  date_of_entry: date("date_of_entry"),
+  plan_attachment_url: text("plan_attachment_url"),
+  billing_ruc: text("billing_ruc"),
+  billing_name: text("billing_name"),
+  billing_address: text("billing_address"),
+  billing_phone: text("billing_phone"),
+  legal_representative_name: text("legal_representative_name"),
+  legal_representative_id: text("legal_representative_id"),
+  status: operationStatusEnum("status").default("new_lead"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertOperationsClientSchema = createInsertSchema(operationsClients).omit({ id: true, created_at: true });
+export type InsertOperationsClient = z.infer<typeof insertOperationsClientSchema>;
+export type OperationsClient = typeof operationsClients.$inferSelect;
+
+export const operationsClientSteps = pgTable("operations_client_steps", {
+  id: varchar("id").primaryKey(),
+  client_operation_id: varchar("client_operation_id").notNull().references(() => operationsClients.id),
+  step_key: text("step_key"),
+  step_name: text("step_name"),
+  completed: boolean("completed").default(false),
+  completed_at: timestamp("completed_at"),
+});
+
+export const insertOperationsClientStepSchema = createInsertSchema(operationsClientSteps).omit({ id: true });
+export type InsertOperationsClientStep = z.infer<typeof insertOperationsClientStepSchema>;
+export type OperationsClientStep = typeof operationsClientSteps.$inferSelect;
+
+export const operationsOnboarding = pgTable("operations_onboarding", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  client_operation_id: varchar("client_operation_id").notNull().references(() => operationsClients.id),
+  assigned_pm: varchar("assigned_pm").references(() => users.id),
+  assigned_coo: varchar("assigned_coo").references(() => users.id),
+  drive_folder_url: text("drive_folder_url"),
+  clickup_space_url: text("clickup_space_url"),
+  whatsapp_group_url: text("whatsapp_group_url"),
+  kickoff_meeting_date: timestamp("kickoff_meeting_date"),
+  kickoff_meeting_url: text("kickoff_meeting_url"),
+  status: onboardingStatusEnum("status").default("pending"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertOperationsOnboardingSchema = createInsertSchema(operationsOnboarding).omit({ id: true, created_at: true });
+export type InsertOperationsOnboarding = z.infer<typeof insertOperationsOnboardingSchema>;
+export type OperationsOnboarding = typeof operationsOnboarding.$inferSelect;
+
+export const operationsServiceActivations = pgTable("operations_service_activations", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").notNull().references(() => companies.id),
+  service_name: text("service_name"),
+  plan_type: text("plan_type"),
+  contract_duration: text("contract_duration"),
+  billing_ruc: text("billing_ruc"),
+  billing_name: text("billing_name"),
+  billing_address: text("billing_address"),
+  contract_addendum_url: text("contract_addendum_url"),
+  status: serviceActivationStatusEnum("status").default("service_registered"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertOperationsServiceActivationSchema = createInsertSchema(operationsServiceActivations).omit({ id: true, created_at: true });
+export type InsertOperationsServiceActivation = z.infer<typeof insertOperationsServiceActivationSchema>;
+export type OperationsServiceActivation = typeof operationsServiceActivations.$inferSelect;
+
+export const activityLogs = pgTable("activity_logs", {
+  id: varchar("id").primaryKey(),
+  company_id: varchar("company_id").references(() => companies.id),
+  user_id: varchar("user_id").references(() => users.id),
+  event_type: text("event_type"),
+  event_description: text("event_description"),
+  metadata: jsonb("metadata"),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({ id: true, created_at: true });
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
 
 // Catalog table
 export const catalog = pgTable("catalog", {

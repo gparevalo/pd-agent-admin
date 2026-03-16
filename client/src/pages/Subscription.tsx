@@ -227,7 +227,7 @@ function PlanCard({
           </div>
 
           <ul className="space-y-4 mb-10 flex-1">
-            {((plan.default_features as string[]) || []).map((feature, i) => (
+            {plan && plan.length > 0 && ((plan.default_features as string[]) || []).map((feature, i) => (
               <li
                 key={i}
                 className="flex items-start gap-3 text-[11px] font-bold text-zinc-500 dark:text-zinc-400 leading-tight"

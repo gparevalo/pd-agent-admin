@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { Tag, Plus, MoreHorizontal, Loader2, Percent, Calendar, DollarSign } from "lucide-react";
+import { Tag, Plus, MoreHorizontal, Loader2, Percent, Calendar, DollarSign, Edit, Power, CheckCircle, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +42,7 @@ export default function AdminDiscounts() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState<DiscountCode | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: discounts, isLoading } = useQuery<DiscountCode[]>({
@@ -59,7 +66,7 @@ export default function AdminDiscounts() {
   const onSubmit = async (data: DiscountFormData) => {
     setIsSubmitting(true);
     try {
-      await api.post("/admin/discounts", {
+      const payload = {
         code: data.code.toUpperCase(),
         description: data.description || null,
         discount_type: data.discount_type,
@@ -67,23 +74,60 @@ export default function AdminDiscounts() {
         billing_cycle: data.billing_cycle || null,
         end_date: data.end_date || null,
         max_uses: data.max_uses ? parseInt(data.max_uses) : null,
-      }, token || undefined);
-      toast({
-        title: "Descuento creado",
-        description: "El código de descuento ha sido creado.",
-      });
+      };
+
+      if (editingDiscount) {
+        await api.put(`/admin/discounts/${editingDiscount.id}`, payload, token || undefined);
+        toast({ title: "Descuento actualizado", description: "El código ha sido actualizado." });
+      } else {
+        await api.post("/admin/discounts", payload, token || undefined);
+        toast({ title: "Descuento creado", description: "El código de descuento ha sido creado." });
+      }
       form.reset();
       setModalOpen(false);
+      setEditingDiscount(null);
       queryClient.invalidateQueries({ queryKey: ["/api/admin/discounts"] });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al crear descuento",
+        description: error instanceof Error ? error.message : "Error al guardar descuento",
       });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const toggleStatus = async (discount: DiscountCode) => {
+    try {
+      await api.put(`/admin/discounts/${discount.id}`, { is_active: !discount.is_active }, token || undefined);
+      toast({ title: "Estado actualizado", description: `Descuento ${discount.is_active ? 'inactivado' : 'activado'}.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/discounts"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el estado del descuento." });
+    }
+  };
+
+  const openEditModal = (discount: DiscountCode) => {
+    setEditingDiscount(discount);
+    form.reset({
+      code: discount.code,
+      description: discount.description || "",
+      discount_type: discount.discount_type || "percentage",
+      discount_value: discount.discount_value?.toString() || "",
+      billing_cycle: discount.billing_cycle || "",
+      end_date: discount.end_date ? new Date(discount.end_date).toISOString().split('T')[0] : "",
+      max_uses: discount.max_uses?.toString() || "",
+    });
+    setModalOpen(true);
+  };
+
+  const handleOpenNew = () => {
+    setEditingDiscount(null);
+    form.reset({
+      code: "", description: "", discount_type: "percentage", discount_value: "", billing_cycle: "", end_date: "", max_uses: ""
+    });
+    setModalOpen(true);
   };
 
   const formatDiscount = (discount: DiscountCode) => {
@@ -104,7 +148,7 @@ export default function AdminDiscounts() {
           <h1 className="pd-page-title">Descuentos</h1>
           <p className="pd-page-subtitle">Gestiona los códigos de descuento</p>
         </div>
-        <Button onClick={() => setModalOpen(true)} data-testid="button-new-discount">
+        <Button onClick={handleOpenNew} data-testid="button-new-discount">
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Descuento
         </Button>
@@ -162,14 +206,28 @@ export default function AdminDiscounts() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={discount.is_active ? "default" : "secondary"}>
+                      <Badge variant={discount.is_active ? "default" : "secondary"} className={discount.is_active ? "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400" : ""}>
+                        {discount.is_active ? <CheckCircle className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
                         {discount.is_active ? "Activo" : "Inactivo"}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditModal(discount)}>
+                            <Edit className="h-4 w-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleStatus(discount)}>
+                            <Power className={`h-4 w-4 mr-2 ${discount.is_active ? 'text-red-500' : 'text-green-500'}`} />
+                            {discount.is_active ? 'Inactivar' : 'Activar'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -187,7 +245,7 @@ export default function AdminDiscounts() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nuevo Descuento</DialogTitle>
+            <DialogTitle>{editingDiscount ? 'Editar Descuento' : 'Nuevo Descuento'}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -198,9 +256,9 @@ export default function AdminDiscounts() {
                   <FormItem>
                     <FormLabel>Código</FormLabel>
                     <FormControl>
-                      <Input 
-                        {...field} 
-                        placeholder="DESCUENTO20" 
+                      <Input
+                        {...field}
+                        placeholder="DESCUENTO20"
                         className="uppercase font-mono"
                         onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                         data-testid="input-discount-code"
@@ -337,7 +395,7 @@ export default function AdminDiscounts() {
                       Guardando...
                     </>
                   ) : (
-                    "Crear Descuento"
+                    "Guardar Descuento"
                   )}
                 </Button>
               </div>

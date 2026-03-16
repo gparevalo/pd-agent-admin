@@ -20,10 +20,18 @@ import SubscriptionBlocked from "@/pages/SubscriptionBlocked";
 import Settings from "@/pages/Settings";
 import CatalogPage from "@/pages/CatalogPage";
 import AdminCompanies from "@/pages/admin/Companies";
+import CompanyDetail from "./pages/admin/CompanyDetail";
 import AdminPlans from "@/pages/admin/Plans";
 import AdminDiscounts from "@/pages/admin/Discounts";
 import AdminSubscriptions from "@/pages/admin/Subscriptions";
 import AdminUsers from "@/pages/admin/Users";
+import OperationsPipeline from "@/pages/admin/OperationsPipeline";
+import OperationsClients from "@/pages/admin/OperationsClients";
+import OperationsOnboarding from "@/pages/admin/OperationsOnboarding";
+import OperationsServices from "@/pages/admin/OperationsServices";
+import AIPlatformWorkspace from "@/pages/admin/AIPlatformWorkspace";
+import AIPlatformAgents from "@/pages/admin/AIPlatformAgents";
+import KickoffPage from "@/pages/KickoffPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, hasActiveSubscription } = useAuth();
@@ -39,10 +47,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Redirect to="/login" />;
-  }
-
-  if (!hasActiveSubscription && location !== "/subscription" && location !== "/blocked") {
-    return <Redirect to="/blocked" />;
   }
 
   return <>{children}</>;
@@ -76,7 +80,8 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
-      
+      <Route path="/kickoff/:token" component={KickoffPage} />
+
       <Route path="/blocked">
         <ProtectedRoute>
           <SubscriptionBlocked />
@@ -163,6 +168,14 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/admin/companies/:id">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <CompanyDetail />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/admin/plans">
         <ProtectedRoute>
           <AuthenticatedLayout>
@@ -191,6 +204,56 @@ function Router() {
         <ProtectedRoute>
           <AuthenticatedLayout>
             <AdminUsers />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* OPERATIONS ROUTES */}
+      <Route path="/admin/operations/pipeline">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <OperationsPipeline />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/operations/crm">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <OperationsClients />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/operations/onboarding">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <OperationsOnboarding />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/operations/services">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <OperationsServices />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* AI PLATFORM ROUTES */}
+      <Route path="/admin/ai-platform/workspace">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <AIPlatformWorkspace />
+          </AuthenticatedLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/ai-platform/agents">
+        <ProtectedRoute>
+          <AuthenticatedLayout>
+            <AIPlatformAgents />
           </AuthenticatedLayout>
         </ProtectedRoute>
       </Route>

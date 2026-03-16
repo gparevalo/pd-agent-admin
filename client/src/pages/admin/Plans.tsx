@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
-import { FileText, Plus, MoreHorizontal, Loader2, DollarSign } from "lucide-react";
+import { FileText, Plus, MoreHorizontal, Loader2, DollarSign, Edit, Power, CheckCircle, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,6 +40,7 @@ export default function AdminPlans() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data: plans, isLoading } = useQuery<Plan[]>({
@@ -55,23 +62,56 @@ export default function AdminPlans() {
   const onSubmit = async (data: PlanFormData) => {
     setIsSubmitting(true);
     try {
-      await api.post("/admin/plans", data, token || undefined);
-      toast({
-        title: "Plan creado",
-        description: "El plan ha sido creado exitosamente.",
-      });
+      if (editingPlan) {
+        await api.put(`/admin/plans/${editingPlan.id}`, data, token || undefined);
+        toast({ title: "Plan actualizado", description: "El plan ha sido actualizado exitosamente." });
+      } else {
+        await api.post("/admin/plans", data, token || undefined);
+        toast({ title: "Plan creado", description: "El plan ha sido creado exitosamente." });
+      }
       form.reset();
       setModalOpen(false);
+      setEditingPlan(null);
       queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al crear plan",
+        description: error instanceof Error ? error.message : "Error al guardar plan",
       });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const toggleStatus = async (plan: Plan) => {
+    try {
+      await api.put(`/admin/plans/${plan.id}`, { is_active: !plan.is_active }, token || undefined);
+      toast({ title: "Estado actualizado", description: `Plan ${plan.is_active ? 'inactivado' : 'activado'}.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/plans"] });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el estado del plan." });
+    }
+  };
+
+  const openEditModal = (plan: Plan) => {
+    setEditingPlan(plan);
+    form.reset({
+      name: plan.name,
+      description: plan.description || "",
+      base_price_monthly: plan.base_price_monthly?.toString() || "",
+      base_price_semestral: plan.base_price_semestral?.toString() || "",
+      base_price_annual: plan.base_price_annual?.toString() || "",
+    });
+    setModalOpen(true);
+  };
+
+  const handleOpenNew = () => {
+    setEditingPlan(null);
+    form.reset({
+      name: "", description: "", base_price_monthly: "", base_price_semestral: "", base_price_annual: ""
+    });
+    setModalOpen(true);
   };
 
   return (
@@ -85,7 +125,7 @@ export default function AdminPlans() {
           <h1 className="pd-page-title">Planes</h1>
           <p className="pd-page-subtitle">Gestiona los planes de suscripción</p>
         </div>
-        <Button onClick={() => setModalOpen(true)} data-testid="button-new-plan">
+        <Button onClick={handleOpenNew} data-testid="button-new-plan">
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Plan
         </Button>
@@ -107,6 +147,7 @@ export default function AdminPlans() {
                   <TableHead>Mensual</TableHead>
                   <TableHead>Semestral</TableHead>
                   <TableHead>Anual</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -136,9 +177,28 @@ export default function AdminPlans() {
                       <span className="font-medium">${plan.base_price_annual} USD</span>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
+                      <Badge variant={plan.is_active ? "default" : "secondary"} className={plan.is_active ? "bg-green-100 text-green-700 hover:bg-green-100" : ""}>
+                        {plan.is_active ? <CheckCircle className="w-3 h-3 mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
+                        {plan.is_active ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditModal(plan)}>
+                            <Edit className="h-4 w-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => toggleStatus(plan)}>
+                            <Power className={`h-4 w-4 mr-2 ${plan.is_active ? 'text-red-500' : 'text-green-500'}`} />
+                            {plan.is_active ? 'Inactivar' : 'Activar'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -156,7 +216,7 @@ export default function AdminPlans() {
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nuevo Plan</DialogTitle>
+            <DialogTitle>{editingPlan ? 'Editar Plan' : 'Nuevo Plan'}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -252,7 +312,7 @@ export default function AdminPlans() {
                       Guardando...
                     </>
                   ) : (
-                    "Crear Plan"
+                    "Guardar Plan"
                   )}
                 </Button>
               </div>
