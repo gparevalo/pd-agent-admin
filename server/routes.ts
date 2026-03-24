@@ -54,6 +54,7 @@ export async function registerRoutes(
         name,
         role: "company_admin",
         status: "active",
+        password_temp: true,
       });
 
       // Create trial subscription (7 days)
@@ -120,7 +121,11 @@ export async function registerRoutes(
 
       // Check user status
       if (user.status !== "active") {
-        return res.status(403).json({ message: "Tu usuario está desactivado. Contacta al administrador." });
+        return res
+          .status(403)
+          .json({
+            message: "Tu usuario está desactivado. Contacta al administrador.",
+          });
       }
 
       // Get company
@@ -131,34 +136,51 @@ export async function registerRoutes(
 
       // Check company status
       if (company.status !== "active") {
-        return res.status(403).json({ message: "La empresa está desactivada. Contacta soporte." });
+        return res
+          .status(403)
+          .json({ message: "La empresa está desactivada. Contacta soporte." });
       }
 
       // Get subscription
       const subscription = await storage.getActiveSubscription(user.company_id);
 
-      // Allow Superadmins to bypass subscription check? 
+      // Allow Superadmins to bypass subscription check?
       // Actually, rule 6 says: "Users can access the platform only if... subscriptions.status IN (...)"
-      // But typically superadmins don't need a subscription. 
+      // But typically superadmins don't need a subscription.
       // Rule 6 might only apply to CLIENTE system users.
 
       if (user.role !== "superadmin") {
         if (!subscription) {
-          return res.status(403).json({ message: "No hay suscripción activa o válida para esta cuenta." });
+          return res
+            .status(403)
+            .json({
+              message: "No hay suscripción activa o válida para esta cuenta.",
+            });
         }
 
         const validStatuses = ["active", "trial", "grace_period"];
         if (!validStatuses.includes(subscription.status)) {
-          return res.status(403).json({ message: `Tu suscripción está ${subscription.status}. Contacta a administración.` });
+          return res
+            .status(403)
+            .json({
+              message: `Tu suscripción está ${subscription.status}. Contacta a administración.`,
+            });
         }
 
         // Check if subscription expired
         const endDate = new Date(subscription.end_date);
         if (endDate < new Date()) {
           // If it's expired by date, update status if not already handled
-          if (subscription.status !== "expired" && subscription.status !== "cancelled") {
-            await storage.updateSubscription(subscription.id, { status: "expired" });
-            return res.status(403).json({ message: "Tu suscripción ha expirado." });
+          if (
+            subscription.status !== "expired" &&
+            subscription.status !== "cancelled"
+          ) {
+            await storage.updateSubscription(subscription.id, {
+              status: "expired",
+            });
+            return res
+              .status(403)
+              .json({ message: "Tu suscripción ha expirado." });
           }
         }
       }
@@ -197,30 +219,38 @@ export async function registerRoutes(
         const companies = await storage.getAllCompanies();
         const subscriptions = await storage.getAllSubscriptions();
 
-        const enrichedCompanies = await Promise.all(companies.map(async (c: any) => {
-          const sub = subscriptions
-            .filter(s => s.company_id === (c.id || c.company_id))
-            .sort((a, b) => {
-              const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-              const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-              return dateB - dateA;
-            })[0];
+        const enrichedCompanies = await Promise.all(
+          companies.map(async (c: any) => {
+            const sub = subscriptions
+              .filter((s) => s.company_id === (c.id || c.company_id))
+              .sort((a, b) => {
+                const dateA = a.created_at
+                  ? new Date(a.created_at).getTime()
+                  : 0;
+                const dateB = b.created_at
+                  ? new Date(b.created_at).getTime()
+                  : 0;
+                return dateB - dateA;
+              })[0];
 
-          const completeness = await storage.getProfileCompleteness(c.id || c.company_id);
+            const completeness = await storage.getProfileCompleteness(
+              c.id || c.company_id,
+            );
 
-          return {
-            ...c,
-            id: c.id || c.company_id, // Ensure ID consistency
-            current_subscription_status: sub ? sub.status : "none",
-            profile_completeness: completeness
-          };
-        }));
+            return {
+              ...c,
+              id: c.id || c.company_id, // Ensure ID consistency
+              current_subscription_status: sub ? sub.status : "none",
+              profile_completeness: completeness,
+            };
+          }),
+        );
 
         res.json(enrichedCompanies);
       } catch (error) {
         res.status(500).json({ message: "Error al obtener empresas" });
       }
-    }
+    },
   );
 
   app.post(
@@ -247,6 +277,7 @@ export async function registerRoutes(
           role: "company_admin",
           status: "active",
           system: "CLIENTE",
+          password_temp: true,
         });
 
         // Log action
@@ -254,15 +285,17 @@ export async function registerRoutes(
           user_id: req.user!.id,
           company_id: company.id,
           action: "company_provisioned",
-          details: { company_id: company.id, admin_id: admin.id }
+          details: { company_id: company.id, admin_id: admin.id },
         });
 
         res.json({ company, admin });
       } catch (error) {
         console.error("Provisioning error:", error);
-        res.status(500).json({ message: "Error al crear empresa y administrador" });
+        res
+          .status(500)
+          .json({ message: "Error al crear empresa y administrador" });
       }
-    }
+    },
   );
 
   app.get(
@@ -272,12 +305,13 @@ export async function registerRoutes(
     async (req, res) => {
       try {
         const company = await storage.getCompany(req.params.id as string);
-        if (!company) return res.status(404).json({ message: "Empresa no encontrada" });
+        if (!company)
+          return res.status(404).json({ message: "Empresa no encontrada" });
         res.json(company);
       } catch (error) {
         res.status(500).json({ message: "Error al obtener empresa" });
       }
-    }
+    },
   );
 
   app.patch(
@@ -286,12 +320,15 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req, res) => {
       try {
-        const updated = await storage.updateCompany(req.params.id as string, req.body);
+        const updated = await storage.updateCompany(
+          req.params.id as string,
+          req.body,
+        );
         res.json(updated);
       } catch (error) {
         res.status(500).json({ message: "Error al actualizar empresa" });
       }
-    }
+    },
   );
 
   app.get(
@@ -301,12 +338,12 @@ export async function registerRoutes(
     async (req, res) => {
       try {
         const users = await storage.getCompanyUsers(req.params.id as string);
-        const filteredUsers = users.filter(u => u.system !== "ADMIN");
+        const filteredUsers = users.filter((u) => u.system !== "ADMIN");
         res.json(filteredUsers);
       } catch (error) {
         res.status(500).json({ message: "Error al obtener usuarios" });
       }
-    }
+    },
   );
 
   app.post(
@@ -326,20 +363,21 @@ export async function registerRoutes(
           role: role || "company_user",
           status: "active",
           system: "CLIENTE",
+          password_temp: true
         });
 
         await storage.logSecurityAction({
           user_id: req.user!.id,
           company_id: req.params.id as string,
           action: "user_created",
-          details: { new_user_id: user.id }
+          details: { new_user_id: user.id },
         });
 
         res.json(user);
       } catch (error) {
         res.status(500).json({ message: "Error al crear usuario" });
       }
-    }
+    },
   );
 
   // Platform Admins
@@ -354,7 +392,7 @@ export async function registerRoutes(
       } catch (error) {
         res.status(500).json({ message: "Error al obtener superadmins" });
       }
-    }
+    },
   );
 
   app.post(
@@ -374,13 +412,14 @@ export async function registerRoutes(
           role: "superadmin",
           status: "active",
           system: "ADMIN",
+          password_temp: true
         });
 
         res.json(admin);
       } catch (error) {
         res.status(500).json({ message: "Error al crear superadmin" });
       }
-    }
+    },
   );
 
   app.patch(
@@ -389,12 +428,16 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req: AuthRequest, res) => {
       try {
-        const updated = await storage.updateUser(req.params.id as string, { status: req.body.status });
+        const updated = await storage.updateUser(req.params.id as string, {
+          status: req.body.status,
+        });
         res.json(updated);
       } catch (error) {
-        res.status(500).json({ message: "Error al actualizar estado de usuario" });
+        res
+          .status(500)
+          .json({ message: "Error al actualizar estado de usuario" });
       }
-    }
+    },
   );
 
   app.post(
@@ -405,20 +448,22 @@ export async function registerRoutes(
       try {
         const { password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
-        await storage.updateUser(req.params.id as string, { password_hash: hashedPassword });
+        await storage.updateUser(req.params.id as string, {
+          password_hash: hashedPassword,
+        });
 
         await storage.logSecurityAction({
           user_id: req.user!.id,
           company_id: "SYSTEM",
           action: "password_reset",
-          details: { target_user_id: req.params.id as string }
+          details: { target_user_id: req.params.id as string },
         });
 
         res.json({ success: true });
       } catch (error) {
         res.status(500).json({ message: "Error al resetear password" });
       }
-    }
+    },
   );
 
   app.delete(
@@ -432,7 +477,7 @@ export async function registerRoutes(
       } catch (error) {
         res.status(500).json({ message: "Error al eliminar usuario" });
       }
-    }
+    },
   );
 
   // ========== SUBSCRIPTION ROUTES ==========
@@ -456,7 +501,8 @@ export async function registerRoutes(
         } = req.body;
 
         const plan = await storage.getPlan(plan_id);
-        if (!plan) return res.status(404).json({ message: "Plan no encontrado" });
+        if (!plan)
+          return res.status(404).json({ message: "Plan no encontrado" });
 
         // Check for existing active/trial/grace subscription
         const existingSub = await storage.getActiveSubscription(company_id);
@@ -464,7 +510,7 @@ export async function registerRoutes(
           const blockedStatuses = ["active", "trial", "grace_period"];
           if (blockedStatuses.includes(existingSub.status)) {
             return res.status(400).json({
-              message: `La empresa ya tiene una suscripción vigente (${existingSub.status}). Debe cancelarla antes de asignar una nueva.`
+              message: `La empresa ya tiene una suscripción vigente (${existingSub.status}). Debe cancelarla antes de asignar una nueva.`,
             });
           }
         }
@@ -1082,7 +1128,7 @@ export async function registerRoutes(
         }
 
         const messages = await storage.getMessagesByConversation(
-          conversationId as string
+          conversationId as string,
         );
 
         res.json(messages);
@@ -1608,7 +1654,7 @@ export async function registerRoutes(
       } catch (error) {
         res.status(500).json({ message: "Error al listar usuarios" });
       }
-    }
+    },
   );
 
   app.get(
@@ -1622,7 +1668,7 @@ export async function registerRoutes(
       } catch (error) {
         res.status(500).json({ message: "Error al obtener logs de actividad" });
       }
-    }
+    },
   );
 
   app.get(
@@ -1631,12 +1677,14 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req, res) => {
       try {
-        const sub = await storage.getSubscriptionByCompany(req.params.id as string);
+        const sub = await storage.getSubscriptionByCompany(
+          req.params.id as string,
+        );
         res.json(sub);
       } catch (error) {
         res.status(500).json({ message: "Error al obtener suscripción" });
       }
-    }
+    },
   );
 
   app.get(
@@ -1671,7 +1719,7 @@ export async function registerRoutes(
       } catch (error) {
         res.status(500).json({ message: "Error al generar token de kickoff" });
       }
-    }
+    },
   );
 
   // Kickoff System - Public
@@ -1690,7 +1738,8 @@ export async function registerRoutes(
       }
 
       const company = await storage.getCompany(id);
-      if (!company) return res.status(404).json({ message: "Empresa no encontrada" });
+      if (!company)
+        return res.status(404).json({ message: "Empresa no encontrada" });
 
       const profiles = await storage.getClientProfile(id);
       const allCatalog = await storage.getCatalogByCompany(id);
@@ -1701,34 +1750,40 @@ export async function registerRoutes(
       const result = results.length > 0 ? results[0] : null;
 
       const services = allCatalog
-        .filter(item => item.item_type === "service")
-        .map(s => ({
+        .filter((item) => item.item_type === "service")
+        .map((s) => ({
           name: s.name,
           problem_solved: s.description,
           customer_benefits: s.details?.includes?.[0] || "",
-          average_price: parseInt(s.base_price || "0")
+          average_price: parseInt(s.base_price || "0"),
         }));
 
       res.json({
         company: { id: company.id, name: company.name },
         existingData: {
-          profile: profiles ? {
-            ...profiles,
-            customer_pain_points: (profiles as any).customer_characteristics
-          } : undefined,
+          profile: profiles
+            ? {
+                ...profiles,
+                customer_pain_points: (profiles as any)
+                  .customer_characteristics,
+              }
+            : undefined,
           services: services.length > 0 ? services : undefined,
           strategy,
-          results: result ? {
-            ...result,
-            sales_cycle_duration: (result as any).sales_cycle,
-            sales_objections: (result as any).purchase_decision_factor,
-            marketing_actions: (result as any).previous_marketing_actions,
-            customer_satisfaction_measurement: (result as any).best_marketing_results,
-            referral_process: (result as any).lead_sources,
-            customer_questions: (result as any).frequent_customer_questions,
-            valuable_resource: (result as any).important_client_knowledge
-          } : undefined
-        }
+          results: result
+            ? {
+                ...result,
+                sales_cycle_duration: (result as any).sales_cycle,
+                sales_objections: (result as any).purchase_decision_factor,
+                marketing_actions: (result as any).previous_marketing_actions,
+                customer_satisfaction_measurement: (result as any)
+                  .best_marketing_results,
+                referral_process: (result as any).lead_sources,
+                customer_questions: (result as any).frequent_customer_questions,
+                valuable_resource: (result as any).important_client_knowledge,
+              }
+            : undefined,
+        },
       });
     } catch (error) {
       res.status(500).json({ message: "Error al validar token" });
@@ -1775,8 +1830,8 @@ export async function registerRoutes(
             details: {
               includes: [s.customer_benefits],
               restrictions: [],
-              estimated_time: ""
-            }
+              estimated_time: "",
+            },
           });
         }
       }
@@ -1789,7 +1844,7 @@ export async function registerRoutes(
           status: "active",
           project_reason: strategy.project_reason,
           expected_results: strategy.expected_results,
-          project_goals: strategy.project_goals
+          project_goals: strategy.project_goals,
         });
       }
 
@@ -1804,16 +1859,17 @@ export async function registerRoutes(
           best_marketing_results: results.customer_satisfaction_measurement, // Mapped
           lead_sources: results.referral_process, // Mapped
           frequent_customer_questions: results.customer_questions, // Mapped
-          important_client_knowledge: results.valuable_resource // Mapped
+          important_client_knowledge: results.valuable_resource, // Mapped
         });
       }
 
       // 5. Update Onboarding status
-      const onboarding = await storage.getOperationsOnboardingByCompany(companyId);
+      const onboarding =
+        await storage.getOperationsOnboardingByCompany(companyId);
       if (onboarding) {
         await storage.upsertOperationsOnboarding({
           ...onboarding,
-          status: "kickoff_completed"
+          status: "kickoff_completed",
         });
       }
 
@@ -1821,8 +1877,9 @@ export async function registerRoutes(
       await storage.createActivityLog({
         company_id: companyId,
         event_type: "kickoff_completed",
-        event_description: "Formulario de Kickoff Estratégico enviado vía enlace público",
-        metadata: { submitted_at: new Date().toISOString() }
+        event_description:
+          "Formulario de Kickoff Estratégico enviado vía enlace público",
+        metadata: { submitted_at: new Date().toISOString() },
       });
 
       res.json({ success: true });
@@ -1831,7 +1888,6 @@ export async function registerRoutes(
       res.status(500).json({ message: "Error al procesar el kickoff" });
     }
   });
-
 
   // Admin - Users
   app.get(
@@ -1876,11 +1932,14 @@ export async function registerRoutes(
     async (req, res) => {
       try {
         const op = await storage.getOperationsClient(req.params.id);
-        if (!op) return res.status(404).json({ message: "Operación no encontrada" });
+        if (!op)
+          return res.status(404).json({ message: "Operación no encontrada" });
         const steps = await storage.getOperationsClientSteps(op.id);
         res.json({ ...op, steps });
       } catch (error) {
-        res.status(500).json({ message: "Error al obtener detalle de operación" });
+        res
+          .status(500)
+          .json({ message: "Error al obtener detalle de operación" });
       }
     },
   );
@@ -1896,35 +1955,61 @@ export async function registerRoutes(
 
         if (newStatus) {
           const currentOp = await storage.getOperationsClient(opId);
-          if (!currentOp) return res.status(404).json({ message: "Operación no encontrada" });
+          if (!currentOp)
+            return res.status(404).json({ message: "Operación no encontrada" });
 
           const currentStatus = currentOp.status;
 
           // Stage Transition Validation
-          if (currentStatus === "new_lead" && newStatus === "contract_pending") {
+          if (
+            currentStatus === "new_lead" &&
+            newStatus === "contract_pending"
+          ) {
             if (!currentOp.client_name || !currentOp.service_contracted) {
-              return res.status(400).json({ message: "Faltan campos requeridos: Nombre de Cliente o Servicio para avanzar a Contrato." });
+              return res
+                .status(400)
+                .json({
+                  message:
+                    "Faltan campos requeridos: Nombre de Cliente o Servicio para avanzar a Contrato.",
+                });
             }
           }
 
-          if (currentStatus === "contract_pending" && newStatus === "onboarding") {
+          if (
+            currentStatus === "contract_pending" &&
+            newStatus === "onboarding"
+          ) {
             if (!currentOp.billing_ruc || !currentOp.billing_name) {
-              return res.status(400).json({ message: "Faltan datos de facturación para activar Onboarding." });
+              return res
+                .status(400)
+                .json({
+                  message:
+                    "Faltan datos de facturación para activar Onboarding.",
+                });
             }
-            
+
             // Check steps completion
-            const { done, total } = await storage.getOperationStageProgress(opId, currentStatus);
+            const { done, total } = await storage.getOperationStageProgress(
+              opId,
+              currentStatus,
+            );
             if (done < total && total > 0) {
-              return res.status(400).json({ message: "Debe completar todos los checklist de la etapa actual antes de avanzar." });
+              return res
+                .status(400)
+                .json({
+                  message:
+                    "Debe completar todos los checklist de la etapa actual antes de avanzar.",
+                });
             }
 
             // Auto-create onboarding record
-            const existingOnboarding = await storage.getOperationsOnboarding(opId);
+            const existingOnboarding =
+              await storage.getOperationsOnboarding(opId);
             if (!existingOnboarding) {
               await storage.upsertOperationsOnboarding({
                 company_id: currentOp.company_id,
                 client_operation_id: opId,
-                status: "pending"
+                status: "pending",
               });
             }
           }
@@ -1946,12 +2031,16 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req, res) => {
       try {
-        const groupedSteps = await storage.getOperationStepsGrouped(req.params.operationId);
+        const groupedSteps = await storage.getOperationStepsGrouped(
+          req.params.operationId,
+        );
         res.json(groupedSteps);
       } catch (error) {
-        res.status(500).json({ message: "Error al obtener pasos de operación" });
+        res
+          .status(500)
+          .json({ message: "Error al obtener pasos de operación" });
       }
-    }
+    },
   );
 
   app.patch(
@@ -1971,12 +2060,15 @@ export async function registerRoutes(
           updateData.completed_by = null;
         }
 
-        const updatedStep = await storage.updateOperationsClientStep(req.params.stepId, updateData);
+        const updatedStep = await storage.updateOperationsClientStep(
+          req.params.stepId,
+          updateData,
+        );
         res.json(updatedStep);
       } catch (error) {
         res.status(500).json({ message: "Error al actualizar paso" });
       }
-    }
+    },
   );
 
   app.post(
@@ -2013,11 +2105,13 @@ export async function registerRoutes(
               account_status: profile?.account_status,
               agency_start_date: profile?.agency_start_date,
             };
-          })
+          }),
         );
         res.json(profiles);
       } catch (error) {
-        res.status(500).json({ message: "Error al obtener listado de clientes" });
+        res
+          .status(500)
+          .json({ message: "Error al obtener listado de clientes" });
       }
     },
   );
@@ -2038,11 +2132,12 @@ export async function registerRoutes(
         const strategies = await storage.getClientStrategies(companyId);
         const results = await storage.getClientResults(companyId);
         const activity = await storage.getActivityLogs(companyId);
-        const onboarding = await storage.getOperationsOnboardingByCompany(companyId);
+        const onboarding =
+          await storage.getOperationsOnboardingByCompany(companyId);
 
         // Fetch pipeline status
         const pipeline = await storage.getOperationsPipeline();
-        const companyOp = pipeline.find(op => op.company_id === companyId);
+        const companyOp = pipeline.find((op) => op.company_id === companyId);
 
         const strategy = strategies.length > 0 ? strategies[0] : null;
         const result = results.length > 0 ? results[0] : null;
@@ -2052,26 +2147,33 @@ export async function registerRoutes(
           pipeline_status: companyOp?.status || "new_lead",
           operation_id: companyOp?.id,
           summary: view,
-          profile: profile ? {
-            ...profile,
-            ...view, // Merge view data into profile for metrics like months_active, total_ltv
-            customer_pain_points: (profile as any).customer_characteristics
-          } : (view ? { ...view } : null),
+          profile: profile
+            ? {
+                ...profile,
+                ...view, // Merge view data into profile for metrics like months_active, total_ltv
+                customer_pain_points: (profile as any).customer_characteristics,
+              }
+            : view
+              ? { ...view }
+              : null,
           contacts,
           services,
           strategy,
           onboarding,
-          results: result ? {
-            ...result,
-            sales_cycle_duration: (result as any).sales_cycle,
-            sales_objections: (result as any).purchase_decision_factor,
-            marketing_actions: (result as any).previous_marketing_actions,
-            customer_satisfaction_measurement: (result as any).best_marketing_results,
-            referral_process: (result as any).lead_sources,
-            customer_questions: (result as any).frequent_customer_questions,
-            valuable_resource: (result as any).important_client_knowledge
-          } : null,
-          activity
+          results: result
+            ? {
+                ...result,
+                sales_cycle_duration: (result as any).sales_cycle,
+                sales_objections: (result as any).purchase_decision_factor,
+                marketing_actions: (result as any).previous_marketing_actions,
+                customer_satisfaction_measurement: (result as any)
+                  .best_marketing_results,
+                referral_process: (result as any).lead_sources,
+                customer_questions: (result as any).frequent_customer_questions,
+                valuable_resource: (result as any).important_client_knowledge,
+              }
+            : null,
+          activity,
         });
       } catch (error) {
         console.error("Client 360 error:", error);
@@ -2101,7 +2203,10 @@ export async function registerRoutes(
     roleMiddleware("superadmin") as any,
     async (req, res) => {
       try {
-        const updated = await storage.upsertOperationsOnboarding({ ...req.body, id: req.params.id });
+        const updated = await storage.upsertOperationsOnboarding({
+          ...req.body,
+          id: req.params.id,
+        });
         res.json(updated);
       } catch (error) {
         res.status(500).json({ message: "Error al actualizar onboarding" });
@@ -2119,7 +2224,9 @@ export async function registerRoutes(
         const services = await storage.getOperationsServiceActivations();
         res.json(services);
       } catch (error) {
-        res.status(500).json({ message: "Error al obtener activaciones de servicios" });
+        res
+          .status(500)
+          .json({ message: "Error al obtener activaciones de servicios" });
       }
     },
   );

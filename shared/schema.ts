@@ -79,6 +79,7 @@ export const users = pgTable("users", {
   status: varchar("status", { length: 20 }).default("active"),
   system: varchar("system", { length: 20 }).default("CLIENTE"),
   created_at: timestamp("created_at").defaultNow(),
+  password_temp: boolean("password_temp").notNull().default(false),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
